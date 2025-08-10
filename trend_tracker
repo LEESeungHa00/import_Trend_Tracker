@@ -12,7 +12,7 @@ import io
 # ---------------------------------
 st.set_page_config(
     page_title="수입량 증감 품목 알리미",
-    page_icon="📊",
+    page_icon="�",
     layout="wide",
 )
 
@@ -215,24 +215,26 @@ if menu == "수입 현황 대시보드":
 
 
 # ---------------------------------
-# 탭 2: 기간별 수입량 분석
+# 탭 2: 기간별 수입량 분석 (기능 개선)
 # ---------------------------------
 elif menu == "기간별 수입량 분석":
     st.title("📆 기간별 수입량 변화 분석")
     st.markdown("---")
 
-    period_type = st.radio("분석 기간 단위를 선택하세요.", ('월별', '분기별', '반기별'), horizontal=True)
-
-    # 기간 선택 UI
-    if period_type == '월별':
-        selected_period = st.selectbox("분석할 월을 선택하세요.", range(1, 13), format_func=lambda x: f"{x}월")
-        period_col = '월'
-    elif period_type == '분기별':
-        selected_period = st.selectbox("분석할 분기를 선택하세요.", range(1, 5), format_func=lambda x: f"{x}분기")
-        period_col = '분기'
-    else: # 반기별
-        selected_period = st.selectbox("분석할 반기를 선택하세요.", range(1, 3), format_func=lambda x: f"{x}반기")
-        period_col = '반기'
+    col1, col2 = st.columns(2)
+    with col1:
+        period_type = st.radio("분석 기간 단위를 선택하세요.", ('월별', '분기별', '반기별'), horizontal=True, key="period_type")
+    
+    with col2:
+        if period_type == '월별':
+            selected_period = st.selectbox("분석할 월을 선택하세요.", range(1, 13), format_func=lambda x: f"{x}월", key="month_select")
+            period_col = '월'
+        elif period_type == '분기별':
+            selected_period = st.selectbox("분석할 분기를 선택하세요.", range(1, 5), format_func=lambda x: f"{x}분기", key="quarter_select")
+            period_col = '분기'
+        else: # 반기별
+            selected_period = st.selectbox("분석할 반기를 선택하세요.", range(1, 3), format_func=lambda x: f"{x}반기", key="half_select")
+            period_col = '반기'
     
     # 선택된 기간의 데이터 필터링
     period_df = df[df[period_col] == selected_period]
@@ -244,20 +246,53 @@ elif menu == "기간별 수입량 분석":
     pivot_df['변화폭(표준편차)'] = pivot_df.std(axis=1)
     pivot_df.sort_values('변화폭(표준편차)', ascending=False, inplace=True)
     
+    st.markdown("---")
     st.header(f"📊 {selected_period}{'월' if period_type=='월별' else ''} 연도별 수입량 변화폭 TOP 10 품목")
     st.info("연도별 수입량의 표준편차가 큰 순서대로 정렬됩니다. 변화가 클수록 순위가 높습니다.")
     
-    st.dataframe(pivot_df.head(10).style.format("{:,.0f}"))
+    # 변화폭이 큰 상위 10개 품목 표시 (표준편차 열은 제외)
+    display_cols = [col for col in pivot_df.columns if col != '변화폭(표준편차)']
+    st.dataframe(pivot_df[display_cols].head(10).style.format("{:,.0f}"))
 
-    st.header("📈 특정 품목 연도별 수입량 추이")
-    # 사용자가 품목을 선택할 수 있도록 selectbox 제공
+    st.markdown("---")
+    st.header("📈 품목별 연도별 수입량 추이 비교")
+    
+    # 품목 선택 (다중 선택)
     top_items = pivot_df.index.tolist()
-    selected_item = st.selectbox("추이를 보고 싶은 품목을 선택하세요.", top_items)
+    default_selection = top_items[:3] if len(top_items) >= 3 else top_items
+    selected_items = st.multiselect(
+        "비교할 품목을 선택하세요 (최대 5개).", 
+        top_items, 
+        default=default_selection,
+        max_selections=5
+    )
 
-    if selected_item:
-        chart_data = pivot_df.loc[selected_item].drop('변화폭(표준편차)')
-        st.line_chart(chart_data)
+    if selected_items:
+        # 차트 종류 선택
+        chart_type = st.radio("차트 종류 선택", ('선 그래프', '막대 그래프'), horizontal=True, key="chart_type")
 
+        # 선택된 품목들의 데이터 추출 (변화폭 열 제외)
+        chart_data = pivot_df.loc[selected_items, display_cols]
+        
+        # 차트 그리기 (데이터프레임의 행과 열을 바꿔서(transpose) 그려야 함)
+        if chart_type == '선 그래프':
+            st.line_chart(chart_data.T)
+        else:
+            st.bar_chart(chart_data.T)
+        
+        # 데이터 상세 보기 (Expander 활용)
+        with st.expander("데이터 상세 보기"):
+            st.subheader("수입량 원본 데이터 (단위: KG)")
+            st.dataframe(chart_data.style.format("{:,.0f}"))
+
+            st.subheader("전년 대비 증감률 (%)")
+            # 증감률 계산 (pct_change)
+            growth_rate_df = chart_data.pct_change(axis='columns') * 100
+            # NaN은 '-'로, 숫자는 소수점 2자리까지 %와 함께 표시
+            st.dataframe(growth_rate_df.style.format("{:.2f}%").highlight_null(null_color='transparent').format(na_rep="-"))
+
+    else:
+        st.info("차트를 보려면 위에서 품목을 하나 이상 선택해주세요.")
 
 # ---------------------------------
 # 탭 3: 데이터 추가
@@ -338,3 +373,4 @@ elif menu == "데이터 추가":
         else:
             st.error("🚨 비밀번호가 틀렸습니다.")
 
+�
