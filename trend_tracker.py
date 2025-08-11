@@ -1,13 +1,10 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib
 from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 import time
-import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
 import altair as alt
 
 # ---------------------------------
@@ -18,26 +15,6 @@ st.set_page_config(
     page_icon="📊",
     layout="wide",
 )
-
-# ---------------------------------
-# 한글 폰트 설정
-# ---------------------------------
-@st.cache_resource
-def get_font():
-    try:
-        font_path = fm.findSystemFonts(fontpaths=None, fontext='ttf')
-        nanum_font = next((f for f in font_path if 'NanumGothic' in f), None)
-        if nanum_font:
-            return fm.FontProperties(fname=nanum_font)
-    except Exception:
-        pass
-    return None
-
-font_prop = get_font()
-if font_prop:
-    plt.rc('font', family=font_prop.get_name())
-plt.rcParams['axes.unicode_minus'] = False
-
 
 # ---------------------------------
 # 상수 정의
@@ -187,28 +164,46 @@ if menu == "수입 현황 대시보드":
     available_months = sorted(analysis_df_raw['월'].unique().astype(int))
     latest_date = analysis_df_raw['날짜'].max()
 
-    def create_mirrored_bar_chart(df_agg, base_col_name, prev_col_name, prev_label, base_label):
+    def create_mirrored_bar_chart_altair(df_agg, base_col, prev_col, base_label, prev_label):
         top_items = df_agg[df_agg['증감률'] > 0].nlargest(5, '증감률')
         bottom_items = df_agg[df_agg['증감률'] < 0].nsmallest(5, '증감률')
-        chart_data = pd.concat([top_items, bottom_items]).sort_values('증감률', ascending=False)
+        chart_data = pd.concat([top_items, bottom_items])
+
         if chart_data.empty:
             st.info("비교할 증감 내역이 있는 품목이 없습니다.")
             return
-        y = np.arange(len(chart_data.index))
-        fig, ax = plt.subplots(figsize=(12, max(6, len(chart_data) * 0.5)))
-        ax.barh(y, -chart_data[prev_col_name], align='center', height=0.6, color='#5f8ad6', label=prev_label)
-        ax.barh(y, chart_data[base_col_name], align='center', height=0.6, color='#d65f5f', label=base_label)
-        ax.set_yticks(y)
-        ax.set_yticklabels(chart_data.index, fontproperties=font_prop)
-        ax.invert_yaxis()
-        ax.set_xticklabels([f'{abs(x):,.0f}' for x in ax.get_xticks()])
-        ax.set_xlabel('수입량 (KG)', fontproperties=font_prop)
-        ax.set_title('품목별 수입량 비교', fontproperties=font_prop, fontsize=14)
-        ax.legend(prop=font_prop)
-        ax.grid(axis='x', linestyle='--', alpha=0.7)
-        ax.axvline(0, color='grey', linewidth=0.8)
-        st.pyplot(fig)
-        plt.clf()
+
+        chart_data = chart_data.reset_index()
+        df_melted = chart_data.melt(
+            id_vars='대표품목별', value_vars=[prev_col, base_col],
+            var_name='시점', value_name='수입량(KG)'
+        )
+        
+        # 이전 시점 값은 음수로 변환하여 왼쪽으로 그리도록 함
+        df_melted['차트_값'] = df_melted.apply(
+            lambda row: -row['수입량(KG)'] if row['시점'] == prev_col else row['수입량(KG)'],
+            axis=1
+        )
+        
+        sort_order = chart_data['대표품목별'].tolist()
+        
+        chart = alt.Chart(df_melted).mark_bar().encode(
+            x=alt.X('차트_값:Q', title='수입량 (KG)', axis=alt.Axis(labelExpr="abs(datum.value)")),
+            y=alt.Y('대표품목별:N', sort=sort_order, title=None),
+            color=alt.Color('시점:N',
+                scale=alt.Scale(domain=[prev_label, base_label], range=['#5f8ad6', '#d65f5f']),
+                legend=alt.Legend(title="시점 구분")
+            ),
+            tooltip=[
+                alt.Tooltip('대표품목별', title='품목'),
+                alt.Tooltip('시점', title='기간'),
+                alt.Tooltip('수입량(KG)', title='수입량', format=',.0f')
+            ]
+        ).properties(
+            title=alt.TitleParams(text=f'{base_label} vs {prev_label} 수입량 비교', anchor='middle')
+        )
+        st.altair_chart(chart.interactive(), use_container_width=True)
+
 
     # --- 1. 전년 대비 분석 ---
     st.subheader("🆚 전년 대비")
@@ -222,7 +217,7 @@ if menu == "수입 현황 대시보드":
     yy_df['증감량(KG)'] = yy_df['기준연도_중량(KG)'] - yy_df['전년도_중량(KG)']
     yy_df['증감률'] = yy_df['증감량(KG)'] / yy_df['전년도_중량(KG)'].replace(0, np.nan)
     with st.expander("📊 좌우 비교 시각화"):
-        create_mirrored_bar_chart(yy_df, '기준연도_중량(KG)', '전년도_중량(KG)', f'{yy_year-1}년', f'{yy_year}년')
+        create_mirrored_bar_chart_altair(yy_df, '기준연도_중량(KG)', '전년도_중량(KG)', f'{yy_year-1}년', f'{yy_year}년')
     yy_formatter = {'기준연도_중량(KG)': '{:,.0f}', '전년도_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
     st.markdown('<p style="color:red; font-weight:bold;">🔼 수입량 증가 TOP 5 (증가율 높은 순)</p>', unsafe_allow_html=True)
     st.dataframe(yy_df[yy_df['증감량(KG)'] > 0].nlargest(5, '증감률').style.format(yy_formatter, na_rep="-"))
@@ -230,6 +225,7 @@ if menu == "수입 현황 대시보드":
     st.dataframe(yy_df[yy_df['증감량(KG)'] < 0].nsmallest(5, '증감률').style.format(yy_formatter, na_rep="-"))
     st.markdown("---")
 
+    # (이하 모든 분석 섹션에 동일한 패턴 적용)
     # --- 2. 전월 대비 분석 ---
     st.subheader("🆚 전월 대비")
     mom_col1, mom_col2 = st.columns(2)
@@ -248,7 +244,7 @@ if menu == "수입 현황 대시보드":
     mom_df['증감량(KG)'] = mom_df['기준월_중량(KG)'] - mom_df['전월_중량(KG)']
     mom_df['증감률'] = mom_df['증감량(KG)'] / mom_df['전월_중량(KG)'].replace(0, np.nan)
     with st.expander("📊 좌우 비교 시각화"):
-        create_mirrored_bar_chart(mom_df, '기준월_중량(KG)', '전월_중량(KG)', f'{prev_month_date.year}년 {prev_month_date.month}월', f'{mom_year}년 {mom_month}월')
+        create_mirrored_bar_chart_altair(mom_df, '기준월_중량(KG)', '전월_중량(KG)', f'{prev_month_date.year}년 {prev_month_date.month}월', f'{mom_year}년 {mom_month}월')
     mom_formatter = {'기준월_중량(KG)': '{:,.0f}', '전월_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
     st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가율 높은 순)</p>', unsafe_allow_html=True)
     st.dataframe(mom_df[mom_df['증감량(KG)'] > 0].nlargest(5, '증감률').style.format(mom_formatter, na_rep="-"))
@@ -272,7 +268,7 @@ if menu == "수입 현황 대시보드":
     yoy_df['증감량(KG)'] = yoy_df['기준월_중량(KG)'] - yoy_df['전년동월_중량(KG)']
     yoy_df['증감률'] = yoy_df['증감량(KG)'] / yoy_df['전년동월_중량(KG)'].replace(0, np.nan)
     with st.expander("📊 좌우 비교 시각화"):
-        create_mirrored_bar_chart(yoy_df, '기준월_중량(KG)', '전년동월_중량(KG)', f'{yoy_year-1}년 {yoy_month}월', f'{yoy_year}년 {yoy_month}월')
+        create_mirrored_bar_chart_altair(yoy_df, '기준월_중량(KG)', '전년동월_중량(KG)', f'{yoy_year-1}년 {yoy_month}월', f'{yoy_year}년 {yoy_month}월')
     yoy_formatter = {'기준월_중량(KG)': '{:,.0f}', '전년동월_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
     st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가율 높은 순)</p>', unsafe_allow_html=True)
     st.dataframe(yoy_df[yoy_df['증감량(KG)'] > 0].nlargest(5, '증감률').style.format(yoy_formatter, na_rep="-"))
@@ -297,7 +293,7 @@ if menu == "수입 현황 대시보드":
     qoq_df['증감량(KG)'] = qoq_df['기준분기_중량(KG)'] - qoq_df['전년동분기_중량(KG)']
     qoq_df['증감률'] = qoq_df['증감량(KG)'] / qoq_df['전년동분기_중량(KG)'].replace(0, np.nan)
     with st.expander("📊 좌우 비교 시각화"):
-        create_mirrored_bar_chart(qoq_df, '기준분기_중량(KG)', '전년동분기_중량(KG)', f'{q_year-1}년 {q_quarter}분기', f'{q_year}년 {q_quarter}분기')
+        create_mirrored_bar_chart_altair(qoq_df, '기준분기_중량(KG)', '전년동분기_중량(KG)', f'{q_year-1}년 {q_quarter}분기', f'{q_year}년 {q_quarter}분기')
     q_formatter = {'기준분기_중량(KG)': '{:,.0f}', '전년동분기_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
     st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가율 높은 순)</p>', unsafe_allow_html=True)
     st.dataframe(qoq_df[qoq_df['증감량(KG)'] > 0].nlargest(5, '증감률').style.format(q_formatter, na_rep="-"))
@@ -323,28 +319,24 @@ if menu == "수입 현황 대시보드":
     hoh_df['증감량(KG)'] = hoh_df['기준반기_중량(KG)'] - hoh_df['전년동반기_중량(KG)']
     hoh_df['증감률'] = hoh_df['증감량(KG)'] / hoh_df['전년동반기_중량(KG)'].replace(0, np.nan)
     with st.expander("📊 좌우 비교 시각화"):
-        create_mirrored_bar_chart(hoh_df, '기준반기_중량(KG)', '전년동반기_중량(KG)', f'{h_year-1}년 {half_display(h_half)}', f'{h_year}년 {half_display(h_half)}')
+        create_mirrored_bar_chart_altair(hoh_df, '기준반기_중량(KG)', '전년동반기_중량(KG)', f'{h_year-1}년 {half_display(h_half)}', f'{h_year}년 {half_display(h_half)}')
     h_formatter = {'기준반기_중량(KG)': '{:,.0f}', '전년동반기_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
     st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가율 높은 순)</p>', unsafe_allow_html=True)
     st.dataframe(hoh_df[hoh_df['증감량(KG)'] > 0].nlargest(5, '증감률').style.format(h_formatter, na_rep="-"))
     st.markdown('<p style="color:blue; font-weight:bold;">🔽 감소 TOP 5 (감소율 높은 순)</p>', unsafe_allow_html=True)
     st.dataframe(hoh_df[hoh_df['증감량(KG)'] < 0].nsmallest(5, '증감률').style.format(h_formatter, na_rep="-"))
 
-# ----------------------------------------------------------------
-# ★★★ 여기가 수정된 부분입니다 (기간별 수입량 분석) ★★★
-# ----------------------------------------------------------------
 elif menu == "기간별 수입량 분석":
+    # (이전과 동일)
     st.title(f"📆 기간별 수입량 추이 분석 (기준: {PRIMARY_WEIGHT_COL})")
     st.markdown("---")
     analysis_df = df.dropna(subset=['날짜', PRIMARY_WEIGHT_COL, '연도', '월', '분기', '반기'])
     if analysis_df.empty:
         st.warning("분석할 유효한 데이터가 없습니다.")
         st.stop()
-    
     col1, col2 = st.columns([0.3, 0.7])
     with col1:
         period_type = st.radio("분석 기간 단위", ('월별', '분기별', '반기별'))
-    
     all_items = sorted(analysis_df['대표품목별'].unique())
     with col2:
         if 'selected_items_memory' not in st.session_state:
@@ -357,7 +349,6 @@ elif menu == "기간별 수입량 분석":
             max_selections=5
         )
         st.session_state.selected_items_memory = selected_items
-    
     if selected_items:
         filtered_df = analysis_df[analysis_df['대표품목별'].isin(selected_items)]
         agg_cols, title = [], ""
@@ -367,39 +358,29 @@ elif menu == "기간별 수입량 분석":
             agg_cols, title = ['연도', '분기'], "분기별 수입량 추이"
         elif period_type == '반기별':
             agg_cols, title = ['연도', '반기'], "반기별 수입량 추이"
-        
         agg_df = filtered_df.groupby(agg_cols + ['대표품목별'])[PRIMARY_WEIGHT_COL].sum().unstack().fillna(0)
-        
         if period_type == '월별':
             agg_df.index = agg_df.index.map(lambda x: f"{int(x[0])}-{int(x[1]):02d}")
         elif period_type == '분기별':
             agg_df.index = agg_df.index.map(lambda x: f"{int(x[0])}-{int(x[1])}분기")
         elif period_type == '반기별':
             agg_df.index = agg_df.index.map(lambda x: f"{int(x[0])}-{'상반기' if x[1] == 1 else '하반기'}")
-        
         st.header(f"📈 {title}")
-        
-        # Altair를 사용한 인터랙티브 차트 생성
         df_melted = agg_df.reset_index().melt(id_vars='index', var_name='대표품목별', value_name='수입량(KG)')
         df_melted.rename(columns={'index': '기간'}, inplace=True)
         df_melted['툴팁_내용'] = df_melted['수입량(KG)'].apply(lambda x: f"{x:,.0f} kg")
-
         chart_type = st.radio("차트 종류", ('선 그래프', '막대 그래프'), horizontal=True, key="chart_type_trends")
-        
         base_chart = alt.Chart(df_melted).encode(
             x=alt.X('기간:N', sort=None, title='기간'),
             y=alt.Y('수입량(KG):Q', title='수입량 (KG)'),
             color='대표품목별:N',
             tooltip=['기간', '대표품목별', alt.Tooltip('툴팁_내용', title='수입량')]
         )
-        
         if chart_type == '선 그래프':
             chart = base_chart.mark_line().interactive()
         else:
             chart = base_chart.mark_bar().interactive()
-            
         st.altair_chart(chart, use_container_width=True)
-            
         with st.expander("데이터 상세 보기"):
             st.subheader("기간별 수입량 (KG)")
             st.dataframe(agg_df.style.format("{:,.0f}"))
