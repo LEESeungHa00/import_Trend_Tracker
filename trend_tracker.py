@@ -188,9 +188,6 @@ menu = st.sidebar.radio(
     ("수입 현황 대시보드", "기간별 수입량 분석", "데이터 추가")
 )
 
-if st.sidebar.button("🔄 데이터 새로고침"):
-    st.cache_data.clear()
-    st.rerun()
 
 df = load_data()
 
