@@ -129,10 +129,34 @@ def create_sample_data():
     df = preprocess_dataframe(df)
     return df
 
-def update_sheet_in_batches(worksheet, dataframe):
+def update_sheet_in_batches(worksheet, dataframe, batch_size=10000):
+    """데이터프레임을 작은 배치로 나누어 구글 시트에 업로드합니다."""
     worksheet.clear()
-    worksheet.update([dataframe.columns.values.tolist()] + dataframe.fillna('').values.tolist(), value_input_option='USER_ENTERED')
-    st.success("✅ 데이터베이스 업로드 완료!")
+    
+    # 헤더 추가
+    worksheet.append_row(dataframe.columns.values.tolist())
+    
+    data = dataframe.fillna('').values.tolist()
+    total_rows = len(data)
+    
+    if total_rows == 0:
+        st.success("✅ 업로드 완료! (데이터 없음)")
+        return
+
+    progress_bar = st.progress(0, text="데이터 업로드를 시작합니다...")
+    
+    # 데이터를 배치 단위로 나누어 업로드
+    for i in range(0, total_rows, batch_size):
+        batch = data[i:i+batch_size]
+        worksheet.append_rows(batch, value_input_option='USER_ENTERED')
+        
+        progress_percentage = min((i + batch_size) / total_rows, 1.0)
+        progress_text = f"{min(i + batch_size, total_rows)} / {total_rows} 행 업로드 중..."
+        progress_bar.progress(progress_percentage, text=progress_text)
+        
+        time.sleep(1) # 구글 API 속도 제한을 피하기 위한 짧은 대기
+        
+    progress_bar.progress(1.0, text="✅ 업로드 완료!")
     
 # ---------------------------------
 # ---- 메인 애플리케이션 로직 ----
