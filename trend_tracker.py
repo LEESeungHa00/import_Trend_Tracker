@@ -71,6 +71,12 @@ def preprocess_dataframe(df):
     df['분기'] = df['날짜'].dt.quarter
     df['반기'] = (df['날짜'].dt.month - 1) // 6 + 1
 
+    # <--- 수정된 부분 ---
+    # 데이터프레임의 컬럼 순서를 DESIRED_HEADER에 맞게 재정렬
+    if not df.empty:
+        df = df.reindex(columns=DESIRED_HEADER)
+    # --- 수정 끝 ---
+    
     return df
 
 @st.cache_data(ttl=600)
@@ -181,6 +187,10 @@ menu = st.sidebar.radio(
     "원하는 기능을 선택하세요.",
     ("수입 현황 대시보드", "기간별 수입량 분석", "데이터 추가")
 )
+
+if st.sidebar.button("🔄 데이터 새로고침"):
+    st.cache_data.clear()
+    st.rerun()
 
 df = load_data()
 
@@ -342,31 +352,9 @@ elif menu == "데이터 추가":
                 else:
                     new_df = pd.read_excel(uploaded_file, dtype=str)
                 
-                new_df_processed = preprocess_dataframe(new_df)
-                
-                client = get_google_sheet_client()
-                if client:
-                    unique_periods = new_df_processed.dropna(subset=['연도', '월'])[['연도', '월']].drop_duplicates()
-                    df_filtered = df.copy()
-                    if not df_filtered.empty and not unique_periods.empty:
-                        for _, row in unique_periods.iterrows():
-                            df_filtered = df_filtered[~((df_filtered['연도'] == row['연도']) & (df_filtered['월'] == row['월']))]
-                    
-                    combined_df = pd.concat([df_filtered, new_df_processed], ignore_index=True)
-                    combined_df.sort_values(by=['Year', 'Month', 'NO'], inplace=True, na_position='last')
-                    df_to_write = combined_df.reindex(columns=DESIRED_HEADER)
-
-                    sheet = client.open(GOOGLE_SHEET_NAME).worksheet(WORKSHEET_NAME)
-                    update_sheet_in_batches(sheet, df_to_write)
-                    
-                    st.info("캐시된 데이터가 갱신되려면 잠시 기다리거나 페이지를 새로고침해주세요.")
-                    st.cache_data.clear()
-                else:
-                    st.error("🚨 구글 시트 연결에 실패했습니다.")
-
-            except Exception as e:
-                st.error(f"데이터 처리/업로드 중 오류 발생: {e}")
-        else:
-            if not uploaded_file: st.warning("⚠️ 파일을 먼저 업로드해주세요.")
-            else: st.error("🚨 비밀번호가 틀렸습니다.")
-
+                # <--- 수정된 부분 ---
+                # 필수 컬럼 검사 로직
+                missing_cols = set(DESIRED_HEADER) - set(new_df.columns)
+                if missing_cols:
+                    st.error(f"🚨 업로드한 파일에 다음 필수 컬럼이 누락되었습니다: {', '.join(missing_cols)}")
+                    st
