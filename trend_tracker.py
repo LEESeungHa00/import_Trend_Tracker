@@ -357,4 +357,33 @@ elif menu == "데이터 추가":
                 missing_cols = set(DESIRED_HEADER) - set(new_df.columns)
                 if missing_cols:
                     st.error(f"🚨 업로드한 파일에 다음 필수 컬럼이 누락되었습니다: {', '.join(missing_cols)}")
-                    st
+                    st.stop() # 처리 중단
+                # --- 수정 끝 ---
+                
+                new_df_processed = preprocess_dataframe(new_df)
+                
+                client = get_google_sheet_client()
+                if client:
+                    unique_periods = new_df_processed.dropna(subset=['연도', '월'])[['연도', '월']].drop_duplicates()
+                    df_filtered = df.copy()
+                    if not df_filtered.empty and not unique_periods.empty:
+                        for _, row in unique_periods.iterrows():
+                            df_filtered = df_filtered[~((df_filtered['연도'] == row['연도']) & (df_filtered['월'] == row['월']))]
+                    
+                    combined_df = pd.concat([df_filtered, new_df_processed], ignore_index=True)
+                    combined_df.sort_values(by=['Year', 'Month', 'NO'], inplace=True, na_position='last')
+                    df_to_write = combined_df.reindex(columns=DESIRED_HEADER)
+
+                    sheet = client.open(GOOGLE_SHEET_NAME).worksheet(WORKSHEET_NAME)
+                    update_sheet_in_batches(sheet, df_to_write)
+                    
+                    st.info("캐시된 데이터가 갱신되려면 잠시 기다리거나 페이지를 새로고침해주세요.")
+                    st.cache_data.clear()
+                else:
+                    st.error("🚨 구글 시트 연결에 실패했습니다.")
+
+            except Exception as e:
+                st.error(f"데이터 처리/업로드 중 오류 발생: {e}")
+        else:
+            if not uploaded_file: st.warning("⚠️ 파일을 먼저 업로드해주세요.")
+            else: st.error("🚨 비밀번호가 틀렸습니다.")
