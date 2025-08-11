@@ -16,11 +16,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# ---------------------------------
-# 구글 시트 연동 설정 (Streamlit Cloud 버전)
-# ---------------------------------
-
-GOOGLE_SHEET_NAME = "수입실적_DB"  # 사용할 구글 시트 파일 이름
+GOOGLE_SHEET_NAME = "수입실적_DB"  # 구글 시트 파일 이름
 WORKSHEET_NAME = "월별통합" # 데이터를 저장할 시트 이름
 
 # 구글 시트 인증 및 클라이언트 객체 생성 함수
@@ -41,7 +37,7 @@ def get_google_sheet_client():
 # ---------------------------------
 # 데이터 로딩 및 전처리
 # ---------------------------------
-@st.cache_data(ttl=1800) # 30분마다 데이터 캐시 갱신
+@st.cache_data(ttl=600) # 10분마다 데이터 캐시 갱신
 def load_data():
     """구글 시트에서 데이터를 로드하고 전처리합니다."""
     client = get_google_sheet_client()
@@ -152,9 +148,17 @@ if menu == "수입 현황 대시보드":
     prev_month_date = current_month_start - pd.DateOffset(months=1)
     prev_year_date = current_month_start - pd.DateOffset(years=1)
 
-    current_data = df[df['날짜'].dt.to_period('M') == current_month_start.to_period('M')]
-    prev_month_data = df[df['날짜'].dt.to_period('M') == prev_month_date.to_period('M')]
-    prev_year_data = df[df['날짜'].dt.to_period('M') == prev_year_date.to_period('M')]
+    # --- 오류 수정 부분 ---
+    # 파이썬 datetime 객체를 Pandas Timestamp로 변환 후 to_period() 호출
+    current_period = pd.Timestamp(current_month_start).to_period('M')
+    prev_month_period = pd.Timestamp(prev_month_date).to_period('M')
+    prev_year_period = pd.Timestamp(prev_year_date).to_period('M')
+
+    # 기간별 데이터 필터링
+    current_data = df[df['날짜'].dt.to_period('M') == current_period]
+    prev_month_data = df[df['날짜'].dt.to_period('M') == prev_month_period]
+    prev_year_data = df[df['날짜'].dt.to_period('M') == prev_year_period]
+    # --- 오류 수정 완료 ---
 
     current_agg = current_data.groupby('대표품목별')['총 중량(KG)'].sum()
     prev_month_agg = prev_month_data.groupby('대표품목별')['총 중량(KG)'].sum()
