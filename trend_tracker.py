@@ -20,8 +20,8 @@ st.set_page_config(
 # ---------------------------------
 PRIMARY_WEIGHT_COL = '적합 중량(KG)'
 DESIRED_HEADER = [
-    'NO', 'Year', 'Month', '제품구분별', '제조국(원산지)별', '수출국별', 
-    '수입용도별', '대표품목별', '총 중량(KG)', '총 금액($)', '적합 중량(KG)', 
+    'NO', 'Year', 'Month', '제품구분별', '제조국(원산지)별', '수출국별',
+    '수입용도별', '대표품목별', '총 중량(KG)', '총 금액($)', '적합 중량(KG)',
     '적합 금액($)', '부적합 중량(KG)', '부적합 금액($)'
 ]
 GOOGLE_SHEET_NAME = "수입실적_DB"
@@ -56,7 +56,7 @@ def preprocess_dataframe(df):
     - 분기/반기 계산을 추가합니다.
     """
     numeric_cols = [
-        '총 중량(KG)', '총 금액($)', '적합 중량(KG)', '적합 금액($)', 
+        '총 중량(KG)', '총 금액($)', '적합 중량(KG)', '적합 금액($)',
         '부적합 중량(KG)', '부적합 금액($)'
     ]
     for col in numeric_cols:
@@ -71,38 +71,50 @@ def preprocess_dataframe(df):
         errors='coerce'
     )
 
-    # --- 분기/반기 계산 확인 ---
-    # 날짜가 유효한 행에 대해서만 연도, 월, 분기, 반기를 계산합니다.
     df['연도'] = df['날짜'].dt.year
     df['월'] = df['날짜'].dt.month
-    df['분기'] = df['날짜'].dt.quarter  # 분기 계산 (1, 2, 3, 4)
-    df['반기'] = (df['날짜'].dt.month - 1) // 6 + 1  # 반기 계산 (1, 2)
-    # --- 계산 확인 완료 ---
-    
+    df['분기'] = df['날짜'].dt.quarter
+    df['반기'] = (df['날짜'].dt.month - 1) // 6 + 1
+
     return df
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=1800)
 def load_data():
-    """구글 시트에서 데이터를 로드하고 전처리합니다."""
+    """구글 시트에서 데이터를 로드하고 전처리합니다. (KeyError 방지 로직 추가)"""
     client = get_google_sheet_client()
     if client is None:
         st.warning("구글 시트 연동에 실패하여 샘플 데이터로 앱을 실행합니다.")
         return create_sample_data()
     try:
         sheet = client.open(GOOGLE_SHEET_NAME).worksheet(WORKSHEET_NAME)
-        data = sheet.get_all_values()
-        
-        if not data or len(data) < 2:
+        all_data = sheet.get_all_values()
+
+        # --- KeyError 방지 로직 ---
+        # 비어있지 않은 첫 행을 찾아 헤더로 사용
+        header_row_index = -1
+        for i, row in enumerate(all_data):
+            if any(cell.strip() for cell in row): # 행에 내용이 있는지 확인
+                header_row_index = i
+                break
+
+        if header_row_index == -1 or header_row_index + 1 >= len(all_data):
+            # 시트가 비어있거나 헤더만 있는 경우
             st.info("데이터베이스에 데이터가 없습니다.")
             return pd.DataFrame()
-        
-        df = pd.DataFrame(data[1:], columns=data[0])
+
+        header = all_data[header_row_index]
+        data = all_data[header_row_index + 1:]
+
+        df = pd.DataFrame(data, columns=header)
+        # --- 로직 수정 완료 ---
+
         if not df.empty:
             df = preprocess_dataframe(df)
         return df
     except Exception as e:
         st.error(f"데이터 로딩 중 오류 발생: {e}")
         return create_sample_data()
+
 
 def create_sample_data():
     """앱 시연을 위한 샘플 데이터 생성"""
@@ -119,7 +131,7 @@ def create_sample_data():
                 item, weight, price, weight*0.95, price*0.95, weight*0.05, price*0.05
             ])
             no_counter += 1
-    
+
     df = pd.DataFrame(data, columns=DESIRED_HEADER)
     df = preprocess_dataframe(df)
     return df
@@ -131,19 +143,19 @@ def update_sheet_in_batches(worksheet, dataframe, batch_size=10000):
     """데이터프레임을 작은 배치로 나누어 구글 시트에 업로드합니다."""
     worksheet.clear()
     worksheet.append_row(dataframe.columns.values.tolist())
-    
+
     data = dataframe.fillna('').values.tolist()
     total_rows = len(data)
-    
+
     progress_bar = st.progress(0, text="데이터 업로드를 시작합니다...")
     for i in range(0, total_rows, batch_size):
         batch = data[i:i+batch_size]
         worksheet.append_rows(batch, value_input_option='USER_ENTERED')
-        
+
         progress_percentage = min((i + batch_size) / total_rows, 1.0)
         progress_text = f"{min(i + batch_size, total_rows)} / {total_rows} 행 업로드 중..."
         progress_bar.progress(progress_percentage, text=progress_text)
-        
+
         time.sleep(1)
     progress_bar.progress(1.0, text="✅ 업로드 완료!")
 
@@ -184,7 +196,7 @@ if menu == "수입 현황 대시보드":
 
     st.markdown("---")
     st.header(f"📈 {latest_year}년 {latest_month}월 수입량 증감 분석")
-    
+
     current_month_start = datetime(latest_year, latest_month, 1)
     prev_month_date = current_month_start - pd.DateOffset(months=1)
     prev_year_date = current_month_start - pd.DateOffset(years=1)
@@ -208,7 +220,7 @@ if menu == "수입 현황 대시보드":
 
     agg_df['전월대비_증감량'] = agg_df['현재월_중량'] - agg_df['전월_중량']
     agg_df['전년동월대비_증감량'] = agg_df['현재월_중량'] - agg_df['전년동월_중량']
-    
+
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("🆚 전월 대비")
@@ -241,12 +253,12 @@ elif menu == "기간별 수입량 분석":
         else:
             selected_period = st.selectbox("반기 선택", range(1, 3), format_func=lambda x: f"{x}반기")
             period_col = '반기'
-    
+
     period_df = analysis_df[analysis_df[period_col] == selected_period]
     pivot_df = period_df.pivot_table(index='대표품목별', columns='연도', values=PRIMARY_WEIGHT_COL, aggfunc='sum').fillna(0)
     pivot_df['변화폭(표준편차)'] = pivot_df.std(axis=1)
     pivot_df.sort_values('변화폭(표준편차)', ascending=False, inplace=True)
-    
+
     st.header("📈 품목별 연도별 수입량 추이 비교")
     top_items = pivot_df.index.tolist()
     default_selection = top_items[:3] if len(top_items) >= 3 else top_items
@@ -255,10 +267,10 @@ elif menu == "기간별 수입량 분석":
     if selected_items:
         chart_type = st.radio("차트 종류", ('선 그래프', '막대 그래프'), horizontal=True)
         chart_data = pivot_df.loc[selected_items].drop(columns=['변화폭(표준편차)'])
-        
+
         if chart_type == '선 그래프': st.line_chart(chart_data.T)
         else: st.bar_chart(chart_data.T)
-        
+
         with st.expander("데이터 상세 보기"):
             st.dataframe(chart_data.style.format("{:,.0f}"))
             growth_rate_df = chart_data.pct_change(axis='columns') * 100
@@ -267,7 +279,7 @@ elif menu == "기간별 수입량 분석":
 elif menu == "데이터 추가":
     st.title("📤 데이터 추가")
     st.info(f"다음 컬럼을 포함한 엑셀/CSV 파일을 업로드해주세요:\n{', '.join(DESIRED_HEADER)}")
-    
+
     uploaded_file = st.file_uploader("파일 선택", type=['xlsx', 'csv'])
     password = st.text_input("업로드 비밀번호", type="password")
 
@@ -279,9 +291,9 @@ elif menu == "데이터 추가":
                     new_df = pd.read_csv(uploaded_file, dtype=str)
                 else:
                     new_df = pd.read_excel(uploaded_file, dtype=str)
-                
+
                 new_df_processed = preprocess_dataframe(new_df)
-                
+
                 client = get_google_sheet_client()
                 if client:
                     unique_periods = new_df_processed.dropna(subset=['연도', '월'])[['연도', '월']].drop_duplicates()
@@ -289,14 +301,14 @@ elif menu == "데이터 추가":
                     if not df_filtered.empty and not unique_periods.empty:
                         for _, row in unique_periods.iterrows():
                             df_filtered = df_filtered[~((df_filtered['연도'] == row['연도']) & (df_filtered['월'] == row['월']))]
-                    
+
                     combined_df = pd.concat([df_filtered, new_df_processed], ignore_index=True)
                     combined_df.sort_values(by=['Year', 'Month', 'NO'], inplace=True, na_position='last')
                     df_to_write = combined_df.reindex(columns=DESIRED_HEADER)
 
                     sheet = client.open(GOOGLE_SHEET_NAME).worksheet(WORKSHEET_NAME)
                     update_sheet_in_batches(sheet, df_to_write)
-                    
+
                     st.info("캐시된 데이터가 갱신되려면 잠시 기다리거나 페이지를 새로고침해주세요.")
                     st.cache_data.clear()
                 else:
