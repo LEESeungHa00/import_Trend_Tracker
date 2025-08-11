@@ -200,7 +200,7 @@ if menu == "수입 현황 대시보드":
             st.metric(label=f"{i+1}. {item}", value=f"{weight:,.0f} kg")
 
     st.markdown("---")
-    st.header(f"📈 {latest_year}년 {latest_month}월 수입량 증감 분석")
+    st.header(f"📈 {latest_year}년 {latest_month}월 수입량(Volume(KG)) 증감 분석")
 
     current_month_start = datetime(latest_year, latest_month, 1)
     prev_month_date = current_month_start - pd.DateOffset(months=1)
@@ -250,7 +250,7 @@ if menu == "수입 현황 대시보드":
 # ★★★ 여기가 수정된 부분입니다 ★★★
 # ----------------------------------------------------------------
 elif menu == "기간별 수입량 분석":
-    st.title(f"📆 기간별 수입량 변화 분석 (기준: {PRIMARY_WEIGHT_COL})")
+    st.title(f"📆 기간별 수입량(Volume(KG)) 변화 분석 (기준: {PRIMARY_WEIGHT_COL})")
     st.markdown("---")
 
     analysis_df = df.dropna(subset=['날짜', PRIMARY_WEIGHT_COL, '분기', '반기'])
