@@ -24,7 +24,7 @@ DESIRED_HEADER = [
     '수입용도별', '대표품목별', '총 중량(KG)', '총 금액($)', '적합 중량(KG)',
     '적합 금액($)', '부적합 중량(KG)', '부적합 금액($)'
 ]
-GOOGLE_SHEET_NAME = "수입실적_DB"  
+GOOGLE_SHEET_NAME = "수입실적_DB" 
 WORKSHEET_NAME = "월별통합"
 
 # ---------------------------------
@@ -167,118 +167,160 @@ if df.empty and menu != "데이터 추가":
 if menu == "수입 현황 대시보드":
     st.title(f"📊 수입 현황 대시보드 (기준: {PRIMARY_WEIGHT_COL})")
     st.markdown("---")
-    st.caption("💡 선택한 시점이 비교의 기준이 됩니다.")
+
     analysis_df_raw = df.dropna(subset=['날짜', PRIMARY_WEIGHT_COL, '연도', '분기', '반기'])
     if analysis_df_raw.empty:
         st.warning("분석할 유효한 데이터가 없습니다. 'Year', 'Month' 데이터가 올바른지 확인해주세요.")
         st.stop()
     
-    # 공통으로 사용할 변수들
     available_years = sorted(analysis_df_raw['연도'].unique().astype(int), reverse=True)
     available_months = sorted(analysis_df_raw['월'].unique().astype(int))
     latest_date = analysis_df_raw['날짜'].max()
-    
-    def display_comparison_table(df_agg, base_name):
-        """결과 데이터프레임을 받아 수직 정렬된 테이블을 표시하는 함수"""
-        formatter = {f'기준{base_name}_중량': '{:,.0f}', f'이전{base_name}_중량': '{:,.0f}',
-                     '증감량': '{:+,.0f}', '증감률': '{:+.2%}'}
-        st.markdown('<p style="color:red; font-weight:bold;">🔼 수입량 증가 TOP 5</p>', unsafe_allow_html=True)
-        st.dataframe(df_agg.nlargest(5, '증감량').style.format(formatter, na_rep="-"))
-        st.markdown('<p style="color:blue; font-weight:bold;">🔽 수입량 감소 TOP 5</p>', unsafe_allow_html=True)
-        st.dataframe(df_agg.nsmallest(5, '증감량').style.format(formatter, na_rep="-"))
+
+    def create_comparison_chart(df_agg, base_col, prev_col):
+        """비교 대상의 막대 그래프를 생성하는 함수"""
+        chart_data = df_agg[[base_col, prev_col]].nlargest(10, base_col)
+        st.bar_chart(chart_data)
+
+    # --- 1. 전년 대비 분석 ---
+    with st.expander("🆚 전년 대비 수입량 분석"):
+        yy_year = st.selectbox("기준 연도", available_years, key="yy_year",
+                               index=0 if not latest_date.year in available_years else available_years.index(latest_date.year))
+        
+        current_yy_data = analysis_df_raw[analysis_df_raw['연도'] == yy_year]
+        prev_yy_data = analysis_df_raw[analysis_df_raw['연도'] == yy_year - 1]
+        
+        current_yy_agg = current_yy_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
+        prev_yy_agg = prev_yy_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
+        
+        yy_df = pd.DataFrame(current_yy_agg).rename(columns={PRIMARY_WEIGHT_COL: '기준연도_중량'})
+        yy_df = yy_df.join(prev_yy_agg.rename('전년도_중량'), how='outer').fillna(0)
+        yy_df['증감량'] = yy_df['기준연도_중량'] - yy_df['전년도_중량']
+        yy_df['증감률'] = yy_df['증감량'] / yy_df['전년도_중량'].replace(0, np.nan)
+
+        st.markdown(f"**{yy_year}년 vs {yy_year-1}년 품목별 수입량 비교**")
+        create_comparison_chart(yy_df, '기준연도_중량', '전년도_중량')
+        
+        st.markdown(f"**{yy_year}년 vs {yy_year-1}년 증감 TOP 5**")
+        yy_formatter = {'기준연도_중량': '{:,.0f}', '전년도_중량': '{:,.0f}', '증감량': '{:+,.0f}', '증감률': '{:+.2%}'}
+        st.markdown('<p style="color:red; font-weight:bold;">🔼 수입량 증가</p>', unsafe_allow_html=True)
+        st.dataframe(yy_df.nlargest(5, '증감량').style.format(yy_formatter, na_rep="-"))
+        st.markdown('<p style="color:blue; font-weight:bold;">🔽 수입량 감소</p>', unsafe_allow_html=True)
+        st.dataframe(yy_df.nsmallest(5, '증감량').style.format(yy_formatter, na_rep="-"))
+
+
+    # --- 2. 월별 비교 분석 ---
+    with st.expander("🆚 월별 수입량 비교 분석"):
+        mom_col1, mom_col2 = st.columns(2)
+        with mom_col1:
+            mom_year = st.selectbox("기준 연도", available_years, key="mom_year",
+                                    index=available_years.index(latest_date.year))
+        with mom_col2:
+            mom_month = st.selectbox("기준 월", available_months, key="mom_month",
+                                     index=available_months.index(latest_date.month))
+        
+        # 전월 대비
+        current_date = datetime(mom_year, mom_month, 1)
+        prev_month_date = current_date - pd.DateOffset(months=1)
+        current_data = analysis_df_raw[(analysis_df_raw['연도'] == mom_year) & (analysis_df_raw['월'] == mom_month)]
+        prev_data = analysis_df_raw[(analysis_df_raw['연도'] == prev_month_date.year) & (analysis_df_raw['월'] == prev_month_date.month)]
+        current_agg = current_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
+        prev_agg = prev_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
+        mom_df = pd.DataFrame(current_agg).rename(columns={PRIMARY_WEIGHT_COL: '기준월_중량'})
+        mom_df = mom_df.join(prev_agg.rename('전월_중량'), how='outer').fillna(0)
+        mom_df['증감량'] = mom_df['기준월_중량'] - mom_df['전월_중량']
+        mom_df['증감률'] = mom_df['증감량'] / mom_df['전월_중량'].replace(0, np.nan)
+        
+        st.markdown(f"**{mom_year}년 {mom_month}월 vs {prev_month_date.year}년 {prev_month_date.month}월 (전월)**")
+        create_comparison_chart(mom_df, '기준월_중량', '전월_중량')
+        st.markdown(f"**전월 대비 증감 TOP 5**")
+        mom_formatter = {'기준월_중량': '{:,.0f}', '전월_중량': '{:,.0f}', '증감량': '{:+,.0f}', '증감률': '{:+.2%}'}
+        st.markdown('<p style="color:red; font-weight:bold;">🔼 증가</p>', unsafe_allow_html=True)
+        st.dataframe(mom_df.nlargest(5, '증감량').style.format(mom_formatter, na_rep="-"))
+        st.markdown('<p style="color:blue; font-weight:bold;">🔽 감소</p>', unsafe_allow_html=True)
+        st.dataframe(mom_df.nsmallest(5, '증감량').style.format(mom_formatter, na_rep="-"))
+
         st.markdown("---")
 
-    # --- 1. 전월 대비 분석 ---
-    title_col, year_col, month_col = st.columns([0.5, 0.25, 0.25])
-    with title_col:
-        st.subheader("🆚 전월 대비")
-    with year_col:
-        mom_year = st.selectbox("연도", available_years, key="mom_year",
-                                index=available_years.index(latest_date.year))
-    with month_col:
-        mom_month = st.selectbox("월", available_months, key="mom_month",
-                                 index=available_months.index(latest_date.month))
+        # 전년 동월 대비
+        prev_year_data = analysis_df_raw[(analysis_df_raw['연도'] == mom_year - 1) & (analysis_df_raw['월'] == mom_month)]
+        prev_year_agg = prev_year_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
+        yoy_df = pd.DataFrame(current_agg).rename(columns={PRIMARY_WEIGHT_COL: '기준월_중량'})
+        yoy_df = yoy_df.join(prev_year_agg.rename('전년동월_중량'), how='outer').fillna(0)
+        yoy_df['증감량'] = yoy_df['기준월_중량'] - yoy_df['전년동월_중량']
+        yoy_df['증감률'] = yoy_df['증감량'] / yoy_df['전년동월_중량'].replace(0, np.nan)
 
-    current_date = datetime(mom_year, mom_month, 1)
-    prev_month_date = current_date - pd.DateOffset(months=1)
-    current_data = analysis_df_raw[(analysis_df_raw['연도'] == mom_year) & (analysis_df_raw['월'] == mom_month)]
-    prev_data = analysis_df_raw[(analysis_df_raw['연도'] == prev_month_date.year) & (analysis_df_raw['월'] == prev_month_date.month)]
-    current_agg = current_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
-    prev_agg = prev_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
-    mom_df = pd.DataFrame(current_agg).rename(columns={PRIMARY_WEIGHT_COL: '기준월_중량'})
-    mom_df = mom_df.join(prev_agg.rename('이전월_중량'), how='outer').fillna(0)
-    mom_df['증감량'] = mom_df['기준월_중량'] - mom_df['이전월_중량']
-    mom_df['증감률'] = mom_df['증감량'] / mom_df['이전월_중량'].replace(0, np.nan)
-    display_comparison_table(mom_df, '월')
-
-
-    # --- 2. 전년 동월 대비 분석 ---
-    title_col_yoy, year_col_yoy, month_col_yoy = st.columns([0.5, 0.25, 0.25])
-    with title_col_yoy:
-        st.subheader("🆚 전년 동월 대비")
-    with year_col_yoy:
-        yoy_year = st.selectbox("연도", available_years, key="yoy_year",
-                                index=available_years.index(latest_date.year))
-    with month_col_yoy:
-        yoy_month = st.selectbox("월", available_months, key="yoy_month",
-                                 index=available_months.index(latest_date.month))
-
-    current_data_yoy = analysis_df_raw[(analysis_df_raw['연도'] == yoy_year) & (analysis_df_raw['월'] == yoy_month)]
-    prev_year_data = analysis_df_raw[(analysis_df_raw['연도'] == yoy_year - 1) & (analysis_df_raw['월'] == yoy_month)]
-    current_agg_yoy = current_data_yoy.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
-    prev_year_agg = prev_year_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
-    yoy_df = pd.DataFrame(current_agg_yoy).rename(columns={PRIMARY_WEIGHT_COL: '기준월_중량'})
-    yoy_df = yoy_df.join(prev_year_agg.rename('이전월_중량'), how='outer').fillna(0)
-    yoy_df['증감량'] = yoy_df['기준월_중량'] - yoy_df['이전월_중량']
-    yoy_df['증감률'] = yoy_df['증감량'] / yoy_df['이전월_중량'].replace(0, np.nan)
-    display_comparison_table(yoy_df, '월')
+        st.markdown(f"**{mom_year}년 {mom_month}월 vs {mom_year - 1}년 {mom_month}월 (전년 동월)**")
+        create_comparison_chart(yoy_df, '기준월_중량', '전년동월_중량')
+        st.markdown(f"**전년 동월 대비 증감 TOP 5**")
+        yoy_formatter = {'기준월_중량': '{:,.0f}', '전년동월_중량': '{:,.0f}', '증감량': '{:+,.0f}', '증감률': '{:+.2%}'}
+        st.markdown('<p style="color:red; font-weight:bold;">🔼 증가</p>', unsafe_allow_html=True)
+        st.dataframe(yoy_df.nlargest(5, '증감량').style.format(yoy_formatter, na_rep="-"))
+        st.markdown('<p style="color:blue; font-weight:bold;">🔽 감소</p>', unsafe_allow_html=True)
+        st.dataframe(yoy_df.nsmallest(5, '증감량').style.format(yoy_formatter, na_rep="-"))
 
 
     # --- 3. 분기별 비교 분석 ---
-    title_col_q, year_col_q, quarter_col_q = st.columns([0.5, 0.25, 0.25])
-    default_quarter = (latest_date.month - 1) // 3 + 1
-    with title_col_q:
-        st.subheader("🆚 전년 동분기 대비")
-    with year_col_q:
-        q_year = st.selectbox("연도", available_years, key="q_year",
-                              index=available_years.index(latest_date.year))
-    with quarter_col_q:
-        q_quarter = st.selectbox("분기", [1, 2, 3, 4], key="q_quarter",
-                                 index=int(default_quarter - 1))
+    with st.expander("🆚 전년 동분기 대비 수입량 분석"):
+        q_col1, q_col2 = st.columns(2)
+        default_quarter = (latest_date.month - 1) // 3 + 1
+        with q_col1:
+            q_year = st.selectbox("기준 연도", available_years, key="q_year",
+                                  index=available_years.index(latest_date.year))
+        with q_col2:
+            q_quarter = st.selectbox("기준 분기", [1, 2, 3, 4], key="q_quarter",
+                                     index=int(default_quarter - 1))
+        
+        current_q_data = analysis_df_raw[(analysis_df_raw['연도'] == q_year) & (analysis_df_raw['분기'] == q_quarter)]
+        prev_q_data = analysis_df_raw[(analysis_df_raw['연도'] == q_year - 1) & (analysis_df_raw['분기'] == q_quarter)]
+        current_q_agg = current_q_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
+        prev_q_agg = prev_q_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
+        qoq_df = pd.DataFrame(current_q_agg).rename(columns={PRIMARY_WEIGHT_COL: '기준분기_중량'})
+        qoq_df = qoq_df.join(prev_q_agg.rename('전년동분기_중량'), how='outer').fillna(0)
+        qoq_df['증감량'] = qoq_df['기준분기_중량'] - qoq_df['전년동분기_중량']
+        qoq_df['증감률'] = qoq_df['증감량'] / qoq_df['전년동분기_중량'].replace(0, np.nan)
 
-    current_q_data = analysis_df_raw[(analysis_df_raw['연도'] == q_year) & (analysis_df_raw['분기'] == q_quarter)]
-    prev_q_data = analysis_df_raw[(analysis_df_raw['연도'] == q_year - 1) & (analysis_df_raw['분기'] == q_quarter)]
-    current_q_agg = current_q_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
-    prev_q_agg = prev_q_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
-    qoq_df = pd.DataFrame(current_q_agg).rename(columns={PRIMARY_WEIGHT_COL: '기준분기_중량'})
-    qoq_df = qoq_df.join(prev_q_agg.rename('이전분기_중량'), how='outer').fillna(0)
-    qoq_df['증감량'] = qoq_df['기준분기_중량'] - qoq_df['이전분기_중량']
-    qoq_df['증감률'] = qoq_df['증감량'] / qoq_df['이전분기_중량'].replace(0, np.nan)
-    display_comparison_table(qoq_df, '분기')
+        st.markdown(f"**{q_year}년 {q_quarter}분기 vs {q_year-1}년 {q_quarter}분기**")
+        create_comparison_chart(qoq_df, '기준분기_중량', '전년동분기_중량')
+        
+        st.markdown(f"**증감 TOP 5**")
+        q_formatter = {'기준분기_중량': '{:,.0f}', '전년동분기_중량': '{:,.0f}', '증감량': '{:+,.0f}', '증감률': '{:+.2%}'}
+        st.markdown('<p style="color:red; font-weight:bold;">🔼 증가</p>', unsafe_allow_html=True)
+        st.dataframe(qoq_df.nlargest(5, '증감량').style.format(q_formatter, na_rep="-"))
+        st.markdown('<p style="color:blue; font-weight:bold;">🔽 감소</p>', unsafe_allow_html=True)
+        st.dataframe(qoq_df.nsmallest(5, '증감량').style.format(q_formatter, na_rep="-"))
 
 
     # --- 4. 반기별 비교 분석 ---
-    title_col_h, year_col_h, half_col_h = st.columns([0.5, 0.25, 0.25])
-    default_half = (latest_date.month - 1) // 6 + 1
-    half_display = lambda x: f"{'상반기' if x == 1 else '하반기'}"
-    with title_col_h:
-        st.subheader("🆚 전년 동반기 대비")
-    with year_col_h:
-        h_year = st.selectbox("연도", available_years, key="h_year",
-                              index=available_years.index(latest_date.year))
-    with half_col_h:
-        h_half = st.selectbox("반기", [1, 2], key="h_half",
-                              index=int(default_half - 1), format_func=half_display)
+    with st.expander("🆚 전년 동반기 대비 수입량 분석"):
+        h_col1, h_col2 = st.columns(2)
+        default_half = (latest_date.month - 1) // 6 + 1
+        half_display = lambda x: f"{'상반기' if x == 1 else '하반기'}"
+        with h_col1:
+            h_year = st.selectbox("기준 연도", available_years, key="h_year",
+                                  index=available_years.index(latest_date.year))
+        with h_col2:
+            h_half = st.selectbox("기준 반기", [1, 2], key="h_half",
+                                  index=int(default_half - 1), format_func=half_display)
+        
+        current_h_data = analysis_df_raw[(analysis_df_raw['연도'] == h_year) & (analysis_df_raw['반기'] == h_half)]
+        prev_h_data = analysis_df_raw[(analysis_df_raw['연도'] == h_year - 1) & (analysis_df_raw['반기'] == h_half)]
+        current_h_agg = current_h_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
+        prev_h_agg = prev_h_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
+        hoh_df = pd.DataFrame(current_h_agg).rename(columns={PRIMARY_WEIGHT_COL: '기준반기_중량'})
+        hoh_df = hoh_df.join(prev_h_agg.rename('전년동반기_중량'), how='outer').fillna(0)
+        hoh_df['증감량'] = hoh_df['기준반기_중량'] - hoh_df['전년동반기_중량']
+        hoh_df['증감률'] = hoh_df['증감량'] / hoh_df['전년동반기_중량'].replace(0, np.nan)
+        
+        st.markdown(f"**{h_year}년 {half_display(h_half)} vs {h_year-1}년 {half_display(h_half)}**")
+        create_comparison_chart(hoh_df, '기준반기_중량', '전년동반기_중량')
 
-    current_h_data = analysis_df_raw[(analysis_df_raw['연도'] == h_year) & (analysis_df_raw['반기'] == h_half)]
-    prev_h_data = analysis_df_raw[(analysis_df_raw['연도'] == h_year - 1) & (analysis_df_raw['반기'] == h_half)]
-    current_h_agg = current_h_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
-    prev_h_agg = prev_h_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
-    hoh_df = pd.DataFrame(current_h_agg).rename(columns={PRIMARY_WEIGHT_COL: '기준반기_중량'})
-    hoh_df = hoh_df.join(prev_h_agg.rename('이전반기_중량'), how='outer').fillna(0)
-    hoh_df['증감량'] = hoh_df['기준반기_중량'] - hoh_df['이전반기_중량']
-    hoh_df['증감률'] = hoh_df['증감량'] / hoh_df['이전반기_중량'].replace(0, np.nan)
-    display_comparison_table(hoh_df, '반기')
+        st.markdown(f"**증감 TOP 5**")
+        h_formatter = {'기준반기_중량': '{:,.0f}', '전년동반기_중량': '{:,.0f}', '증감량': '{:+,.0f}', '증감률': '{:+.2%}'}
+        st.markdown('<p style="color:red; font-weight:bold;">🔼 증가</p>', unsafe_allow_html=True)
+        st.dataframe(hoh_df.nlargest(5, '증감량').style.format(h_formatter, na_rep="-"))
+        st.markdown('<p style="color:blue; font-weight:bold;">🔽 감소</p>', unsafe_allow_html=True)
+        st.dataframe(hoh_df.nsmallest(5, '증감량').style.format(h_formatter, na_rep="-"))
 
 
 # ----------------------------------------------------------------
