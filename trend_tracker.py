@@ -187,7 +187,7 @@ if menu == "수입 현황 대시보드":
     latest_year = latest_date.year
     latest_month = latest_date.month
 
-    st.header(f"🥇 {latest_year}년 누적 수입량 TOP 5 품목")
+    st.header(f"🏆 {latest_year}년 누적 수입량 TOP 5 품목")
     top5_this_year = analysis_df[analysis_df['연도'] == latest_year].groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum().nlargest(5)
     cols = st.columns(5)
     for i, (item, weight) in enumerate(top5_this_year.items()):
@@ -218,18 +218,18 @@ if menu == "수입 현황 대시보드":
     agg_df = agg_df.join(prev_year_agg.rename('전년동월_중량'), how='outer')
     agg_df.fillna(0, inplace=True)
 
-    agg_df['전월대비_증감량'] = agg_df['현재월_중량'] - agg_df['전월_중량']
-    agg_df['전년동월대비_증감량'] = agg_df['현재월_중량'] - agg_df['전년동월_중량']
+    agg_df['전월대비_증감량(KG)'] = agg_df['현재월_중량'] - agg_df['전월_중량']
+    agg_df['전년동월대비_증감량(KG)'] = agg_df['현재월_중량'] - agg_df['전년동월_중량']
 
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("🆚 전월 대비")
-        st.dataframe(agg_df.nlargest(5, '전월대비_증감량')[['현재월_중량', '전월_중량', '전월대비_증감량']].style.format("{:,.0f}"))
-        st.dataframe(agg_df.nsmallest(5, '전월대비_증감량')[['현재월_중량', '전월_중량', '전월대비_증감량']].style.format("{:,.0f}"))
+        st.dataframe(agg_df.nlargest(5, '전월대비_증감량(KG)')[['현재월_중량', '전월_중량', '전월대비_증감량(KG)']].style.format("{:,.0f}"))
+        st.dataframe(agg_df.nsmallest(5, '전월대비_증감량(KG)')[['현재월_중량', '전월_중량', '전월대비_증감량(KG)']].style.format("{:,.0f}"))
     with col2:
         st.subheader("🆚 전년 동월 대비")
-        st.dataframe(agg_df.nlargest(5, '전년동월대비_증감량')[['현재월_중량', '전년동월_중량', '전년동월대비_증감량']].style.format("{:,.0f}"))
-        st.dataframe(agg_df.nsmallest(5, '전년동월대비_증감량')[['현재월_중량', '전년동월_중량', '전년동월대비_증감량']].style.format("{:,.0f}"))
+        st.dataframe(agg_df.nlargest(5, '전년동월대비_증감량(KG)')[['현재월_중량', '전년동월_중량', '전년동월대비_증감량(KG)']].style.format("{:,.0f}"))
+        st.dataframe(agg_df.nsmallest(5, '전년동월대비_증감량(KG)')[['현재월_중량', '전년동월_중량', '전년동월대비_증감량(KG)']].style.format("{:,.0f}"))
 
 elif menu == "기간별 수입량 분석":
     st.title(f"📆 기간별 수입량 변화 분석 (기준: {PRIMARY_WEIGHT_COL})")
