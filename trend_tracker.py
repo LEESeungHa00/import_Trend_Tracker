@@ -75,7 +75,7 @@ def preprocess_dataframe(df):
 
 @st.cache_data(ttl=600)
 def load_data():
-    """구글 시트에서 데이터를 로드하고 전처리합니다."""
+    """구글 시트에서 데이터를 로드하고 전처리합니다. (안정성 강화)"""
     client = get_google_sheet_client()
     if client is None:
         st.warning("구글 시트 연동에 실패하여 샘플 데이터로 앱을 실행합니다.")
@@ -84,25 +84,50 @@ def load_data():
         sheet = client.open(GOOGLE_SHEET_NAME).worksheet(WORKSHEET_NAME)
         all_data = sheet.get_all_values()
 
-        header_row_index = -1
-        for i, row in enumerate(all_data):
-            if any(cell.strip() for cell in row):
-                header_row_index = i
-                break
-
-        if header_row_index == -1 or header_row_index + 1 >= len(all_data):
-            st.info("데이터베이스에 데이터가 없습니다.")
+        if not all_data:
+            st.info("시트가 비어있습니다.")
             return pd.DataFrame()
 
-        header = all_data[header_row_index]
-        data = all_data[header_row_index + 1:]
+        # 1. 비어있지 않은 첫 행을 찾아 헤더로 사용
+        header_row_index = -1
+        header = []
+        for i, row in enumerate(all_data):
+            if any(cell.strip() for cell in row):
+                header = row
+                header_row_index = i
+                break
+        
+        if not header:
+            st.info("시트에 내용이 없습니다.")
+            return pd.DataFrame()
 
-        df = pd.DataFrame(data, columns=header)
+        # 2. 헤더 유효성 검사 (핵심 수정)
+        required_cols_for_header = ['Year', 'Month', PRIMARY_WEIGHT_COL]
+        if not all(col in header for col in required_cols_for_header):
+            st.error(f"오류: 구글 시트에서 유효한 헤더를 찾을 수 없습니다. 헤더에 '{', '.join(required_cols_for_header)}' 컬럼이 모두 포함되어 있는지 확인해주세요.")
+            return pd.DataFrame()
+
+        # 3. 데이터 추출
+        data_start_index = header_row_index + 1
+        if data_start_index >= len(all_data):
+            st.info("헤더만 있고 데이터가 없습니다.")
+            return pd.DataFrame()
+            
+        data = all_data[data_start_index:]
+        
+        # 4. 데이터프레임 생성 (오류 핸들링 강화)
+        try:
+            df = pd.DataFrame(data, columns=header)
+            df.dropna(how='all', inplace=True) # 모든 값이 비어있는 행 제거
+        except ValueError as ve:
+            st.error(f"데이터프레임 생성 오류: 데이터의 열 개수가 헤더와 일치하지 않을 수 있습니다. 구글 시트의 데이터 구조를 확인해주세요. ({ve})")
+            return pd.DataFrame()
+
         if not df.empty:
             df = preprocess_dataframe(df)
         return df
     except Exception as e:
-        st.error(f"데이터 로딩 중 오류 발생: {e}")
+        st.error(f"데이터 로딩 중 예상치 못한 오류 발생: {e}")
         return create_sample_data()
 
 def create_sample_data():
@@ -214,10 +239,9 @@ if menu == "수입 현황 대시보드":
     
     col1, col2 = st.columns(2)
     
-    # --- 최종 오류 수정: '{:+,_d}' -> '{:+,d}' -> '{:+,0.f}---
     formatter = {
         '현재월_중량': '{:,.0f}', '전월_중량': '{:,.0f}', '전년동월_중량': '{:,.0f}',
-        '전월대비_증감량': '{:+,.0f}', '전년동월대비_증감량': '{:+,.0f}',
+        '전월대비_증감량': '{:+,d}', '전년동월대비_증감량': '{:+,d}',
         '전월대비_증감률': '{:+.2%}', '전년동월대비_증감률': '{:+.2%}'
     }
     
