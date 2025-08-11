@@ -129,7 +129,7 @@ def create_sample_data():
     df = preprocess_dataframe(df)
     return df
 
-# ★★★ 여기가 수정된 부분입니다 (batch_size=10000 적용) ★★★
+# ★★★ (batch_size=10000 적용) ★★★
 def update_sheet_in_batches(worksheet, dataframe, batch_size=10000):
     """데이터프레임을 작은 배치로 나누어 구글 시트에 업로드합니다."""
     worksheet.clear()
@@ -195,6 +195,7 @@ if menu == "수입 현황 대시보드":
         if chart_data.empty:
             st.info("비교할 증감 내역이 있는 품목이 없습니다.")
             return
+            
         chart_data = chart_data.reset_index()
         df_melted = chart_data.melt(
             id_vars='대표품목별', value_vars=[prev_col, base_col],
