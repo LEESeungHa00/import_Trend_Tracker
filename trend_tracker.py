@@ -201,7 +201,7 @@ if menu == "수입 현황 대시보드":
     latest_year = latest_date.year
     latest_month = latest_date.month
 
-    st.header(f"🥇 {latest_year}년 누적 수입량 TOP 5 품목")
+    st.header(f"🏆 {latest_year}년 누적 수입량 TOP 5 품목")
     top5_this_year = analysis_df_raw[analysis_df_raw['연도'] == latest_year].groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum().nlargest(5)
     cols = st.columns(5)
     for i, (item, weight) in enumerate(top5_this_year.items()):
