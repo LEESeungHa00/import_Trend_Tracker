@@ -26,6 +26,7 @@ def get_google_sheet_client():
         # st.secrets에서 직접 서비스 계정 정보를 읽어옵니다.
         creds_dict = st.secrets["gcp_service_account"]
         scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+        scopes = ["https://www.googleapis.com/auth/drive"]
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         client = gspread.authorize(creds)
         return client
