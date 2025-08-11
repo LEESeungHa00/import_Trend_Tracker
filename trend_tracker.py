@@ -24,7 +24,7 @@ DESIRED_HEADER = [
     '수입용도별', '대표품목별', '총 중량(KG)', '총 금액($)', '적합 중량(KG)',
     '적합 금액($)', '부적합 중량(KG)', '부적합 금액($)'
 ]
-GOOGLE_SHEET_NAME = "수입실적_DB"
+GOOGLE_SHEET_NAME = "수입실적_데이터베이스"
 WORKSHEET_NAME = "월별통합"
 
 # ---------------------------------
@@ -163,7 +163,6 @@ if df.empty and menu != "데이터 추가":
     st.warning("데이터가 없습니다. '데이터 추가' 탭으로 이동하여 엑셀 파일을 업로드해주세요.")
     st.stop()
 
-# --- 탭 1: 수입 현황 대시보드 (개선됨) ---
 if menu == "수입 현황 대시보드":
     st.title(f"📊 수입 현황 대시보드 (기준: {PRIMARY_WEIGHT_COL})")
     st.markdown("---")
@@ -177,7 +176,7 @@ if menu == "수입 현황 대시보드":
     latest_year = latest_date.year
     latest_month = latest_date.month
 
-    st.header(f"🏆 {latest_year}년 누적 수입량 TOP 5 품목")
+    st.header(f"🥇 {latest_year}년 누적 수입량 TOP 5 품목")
     top5_this_year = analysis_df_raw[analysis_df_raw['연도'] == latest_year].groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum().nlargest(5)
     cols = st.columns(5)
     for i, (item, weight) in enumerate(top5_this_year.items()):
@@ -210,36 +209,32 @@ if menu == "수입 현황 대시보드":
 
     agg_df['전월대비_증감량'] = agg_df['현재월_중량'] - agg_df['전월_중량']
     agg_df['전년동월대비_증감량'] = agg_df['현재월_중량'] - agg_df['전년동월_중량']
-
-    # --- 개선 사항 1: 증감률 계산 ---
     agg_df['전월대비_증감률'] = (agg_df['전월대비_증감량'] / agg_df['전월_중량'].replace(0, np.nan))
     agg_df['전년동월대비_증감률'] = (agg_df['전년동월대비_증감량'] / agg_df['전년동월_중량'].replace(0, np.nan))
     
     col1, col2 = st.columns(2)
+    formatter = {
+        '현재월_중량': '{:,.0f}', '전월_중량': '{:,.0f}', '전년동월_중량': '{:,.0f}',
+        '전월대비_증감량': '{:+,_d}', '전년동월대비_증감량': '{:+,_d}',
+        '전월대비_증감률': '{:+.2%}', '전년동월대비_증감률': '{:+.2%}'
+    }
+    
     with col1:
         st.subheader(f"🆚 전월 대비 (vs {prev_month_date.month}월)")
+        st.markdown('<p style="color:red; font-weight:bold;">🔼 수입량 증가 TOP 5</p>', unsafe_allow_html=True)
+        st.dataframe(agg_df.nlargest(5, '전월대비_증감량')[['현재월_중량', '전월_중량', '전월대비_증감량', '전월대비_증감률']].style.format(formatter, na_rep="-"))
         
-        st.markdown('🔺수입량 증가 TOP 5')
-        st.dataframe(agg_df.nlargest(5, '전월대비_증감량')[['현재월_중량', '전월_중량', '전월대비_증감량', '전월대비_증감률']].style.format(
-            '현재월_중량': '{:,.0f}', '전월_중량': '{:,.0f}', '전월대비_증감량': '{:+,_d}', '전월대비_증감률': '{:+.2%}',na_rep="-"))
-        
-        st.markdown('🔻수입량 감소 TOP 5')
-        st.dataframe(agg_df.nsmallest(5, '전월대비_증감량')[['현재월_중량', '전월_중량', '전월대비_증감량', '전월대비_증감률']].style.format(
-            '현재월_중량': '{:,.0f}', '전월_중량': '{:,.0f}', '전월대비_증감량': '{:+,_d}', '전월대비_증감률': '{:+.2%}'na_rep="-"))
+        st.markdown('<p style="color:blue; font-weight:bold;">🔽 수입량 감소 TOP 5</p>', unsafe_allow_html=True)
+        st.dataframe(agg_df.nsmallest(5, '전월대비_증감량')[['현재월_중량', '전월_중량', '전월대비_증감량', '전월대비_증감률']].style.format(formatter, na_rep="-"))
 
     with col2:
         st.subheader(f"🆚 전년 동월 대비 (vs {prev_year_date.year}년)")
-        st.markdown('🔺수입량 증가 TOP 5')
-        st.dataframe(agg_df.nlargest(5, '전년동월대비_증감량')[['현재월_중량', '전년동월_중량', '전년동월대비_증감량', '전년동월대비_증감률']].style.format({
-            '현재월_중량': '{:,.0f}', '전년동월_중량': '{:,.0f}', '전년동월대비_증감량': '{:+,_d}', '전년동월대비_증감률': '{:+.2%}'
-        }).format(na_rep="-"))
+        st.markdown('<p style="color:red; font-weight:bold;">🔼 수입량 증가 TOP 5</p>', unsafe_allow_html=True)
+        st.dataframe(agg_df.nlargest(5, '전년동월대비_증감량')[['현재월_중량', '전년동월_중량', '전년동월대비_증감량', '전년동월대비_증감률']].style.format(formatter, na_rep="-"))
         
-        st.markdown('🔻수입량 감소 TOP 5')
-        st.dataframe(agg_df.nsmallest(5, '전년동월대비_증감량')[['현재월_중량', '전년동월_중량', '전년동월대비_증감량', '전년동월대비_증감률']].style.format({
-            '현재월_중량': '{:,.0f}', '전년동월_중량': '{:,.0f}', '전년동월대비_증감량': '{:+,_d}', '전년동월대비_증감률': '{:+.2%}'
-        }).format(na_rep="-"))
+        st.markdown('<p style="color:blue; font-weight:bold;">🔽 수입량 감소 TOP 5</p>', unsafe_allow_html=True)
+        st.dataframe(agg_df.nsmallest(5, '전년동월대비_증감량')[['현재월_중량', '전년동월_중량', '전년동월대비_증감량', '전년동월대비_증감률']].style.format(formatter, na_rep="-"))
 
-# --- 탭 2: 기간별 수입량 분석 (개선됨) ---
 elif menu == "기간별 수입량 분석":
     st.title(f"📆 기간별 수입량 변화 분석 (기준: {PRIMARY_WEIGHT_COL})")
     st.markdown("---")
@@ -259,8 +254,13 @@ elif menu == "기간별 수입량 분석":
         elif period_type == '분기별':
             selected_period = st.selectbox("분기 선택", range(1, 5), format_func=lambda x: f"{x}분기")
             period_col = '분기'
-        else:
-            selected_period = st.selectbox("반기 선택", range(1, 3), format_func=lambda x: f"{x}반기")
+        else: # 반기별
+            # --- 최종 수정: '상반기'/'하반기' 표시 ---
+            selected_period = st.selectbox(
+                "반기 선택",
+                options=[1, 2],
+                format_func=lambda x: '상반기' if x == 1 else '하반기'
+            )
             period_col = '반기'
     
     period_df = analysis_df[analysis_df[period_col] == selected_period]
@@ -270,14 +270,10 @@ elif menu == "기간별 수입량 분석":
     
     st.header("📈 품목별 연도별 수입량 추이 비교")
     
-    # --- 개선 사항 2: 선택 값 유지 로직 ---
-    # session_state 초기화
     if 'selected_items_memory' not in st.session_state:
         st.session_state.selected_items_memory = []
 
     top_items = pivot_df.index.tolist()
-    
-    # 현재 기간에서 유효한 품목만 남기기
     valid_selection = [item for item in st.session_state.selected_items_memory if item in top_items]
     st.session_state.selected_items_memory = valid_selection
 
@@ -285,10 +281,9 @@ elif menu == "기간별 수입량 분석":
         "품목 선택 (최대 5개)",
         options=top_items,
         placeholder="수입량을 확인할 품목을 선택해주세요",
-        default=st.session_state.selected_items_memory, # session_state 값으로 기본값 설정
+        default=st.session_state.selected_items_memory,
         max_selections=5
     )
-    # 현재 선택값을 session_state에 저장
     st.session_state.selected_items_memory = selected_items
 
     if selected_items:
@@ -304,10 +299,8 @@ elif menu == "기간별 수입량 분석":
             
             st.subheader("전년 대비 증감률 (%)")
             growth_rate_df = chart_data.pct_change(axis='columns')
-            # --- 개선 사항 3: 증감률 포맷팅 확인 ---
-            st.dataframe(growth_rate_df.style.format("{:+.2%}").format(na_rep="-"))
+            st.dataframe(growth_rate_df.style.format("{:+.2%}", na_rep="-"))
 
-# --- 탭 3: 데이터 추가 ---
 elif menu == "데이터 추가":
     st.title("📤 데이터 추가")
     st.info(f"다음 컬럼을 포함한 엑셀/CSV 파일을 업로드해주세요:\n{', '.join(DESIRED_HEADER)}")
