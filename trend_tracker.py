@@ -209,7 +209,35 @@ if menu == "수입 현황 대시보드":
     st.dataframe(yy_df.nsmallest(5, '증감량').style.format(yy_formatter, na_rep="-"))
     st.markdown("---")
 
-    # --- 2. 전월 대비 분석 ---
+    # --- 2. 전년 동월 대비 분석 ---
+    st.subheader("🆚 전년 동월 대비")
+    yoy_col1, yoy_col2 = st.columns(2)
+    with yoy_col1:
+        yoy_year = st.selectbox("기준 연도", available_years, key="yoy_year", index=available_years.index(latest_date.year))
+    with yoy_col2:
+        yoy_month = st.selectbox("기준 월", available_months, key="yoy_month", index=available_months.index(latest_date.month))
+
+    current_data_yoy = analysis_df_raw[(analysis_df_raw['연도'] == yoy_year) & (analysis_df_raw['월'] == yoy_month)]
+    prev_year_data = analysis_df_raw[(analysis_df_raw['연도'] == yoy_year - 1) & (analysis_df_raw['월'] == yoy_month)]
+    current_agg_yoy = current_data_yoy.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
+    prev_year_agg = prev_year_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
+    yoy_df = pd.DataFrame(current_agg_yoy).rename(columns={PRIMARY_WEIGHT_COL: '기준월_중량'})
+    yoy_df = yoy_df.join(prev_year_agg.rename('전년동월_중량'), how='outer').fillna(0)
+    yoy_df['증감량'] = yoy_df['기준월_중량'] - yoy_df['전년동월_중량']
+    yoy_df['증감률'] = yoy_df['증감량'] / yoy_df['전년동월_중량'].replace(0, np.nan)
+    
+    with st.expander("📊 품목별 증감량 시각화"):
+        st.markdown(f"**{yoy_year}년 {yoy_month}월 vs {yoy_year - 1}년 {yoy_month}월**")
+        create_comparison_chart(yoy_df)
+
+    yoy_formatter = {'기준월_중량': '{:,.0f}', '전년동월_중량': '{:,.0f}', '증감량': '{:+,.0f}', '증감률': '{:+.2%}'}
+    st.markdown('<p style="color:red; font-weight:bold;">🔼 증가</p>', unsafe_allow_html=True)
+    st.dataframe(yoy_df.nlargest(5, '증감량').style.format(yoy_formatter, na_rep="-"))
+    st.markdown('<p style="color:blue; font-weight:bold;">🔽 감소</p>', unsafe_allow_html=True)
+    st.dataframe(yoy_df.nsmallest(5, '증감량').style.format(yoy_formatter, na_rep="-"))
+    st.markdown("---")
+
+    # --- 3. 전월 대비 분석 ---
     st.subheader("🆚 전월 대비")
     mom_col1, mom_col2 = st.columns(2)
     with mom_col1:
@@ -237,34 +265,6 @@ if menu == "수입 현황 대시보드":
     st.dataframe(mom_df.nlargest(5, '증감량').style.format(mom_formatter, na_rep="-"))
     st.markdown('<p style="color:blue; font-weight:bold;">🔽 감소</p>', unsafe_allow_html=True)
     st.dataframe(mom_df.nsmallest(5, '증감량').style.format(mom_formatter, na_rep="-"))
-    st.markdown("---")
-
-    # --- 3. 전년 동월 대비 분석 ---
-    st.subheader("🆚 전년 동월 대비")
-    yoy_col1, yoy_col2 = st.columns(2)
-    with yoy_col1:
-        yoy_year = st.selectbox("기준 연도", available_years, key="yoy_year", index=available_years.index(latest_date.year))
-    with yoy_col2:
-        yoy_month = st.selectbox("기준 월", available_months, key="yoy_month", index=available_months.index(latest_date.month))
-
-    current_data_yoy = analysis_df_raw[(analysis_df_raw['연도'] == yoy_year) & (analysis_df_raw['월'] == yoy_month)]
-    prev_year_data = analysis_df_raw[(analysis_df_raw['연도'] == yoy_year - 1) & (analysis_df_raw['월'] == yoy_month)]
-    current_agg_yoy = current_data_yoy.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
-    prev_year_agg = prev_year_data.groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum()
-    yoy_df = pd.DataFrame(current_agg_yoy).rename(columns={PRIMARY_WEIGHT_COL: '기준월_중량'})
-    yoy_df = yoy_df.join(prev_year_agg.rename('전년동월_중량'), how='outer').fillna(0)
-    yoy_df['증감량'] = yoy_df['기준월_중량'] - yoy_df['전년동월_중량']
-    yoy_df['증감률'] = yoy_df['증감량'] / yoy_df['전년동월_중량'].replace(0, np.nan)
-    
-    with st.expander("📊 품목별 증감량 시각화"):
-        st.markdown(f"**{yoy_year}년 {yoy_month}월 vs {yoy_year - 1}년 {yoy_month}월**")
-        create_comparison_chart(yoy_df)
-
-    yoy_formatter = {'기준월_중량': '{:,.0f}', '전년동월_중량': '{:,.0f}', '증감량': '{:+,.0f}', '증감률': '{:+.2%}'}
-    st.markdown('<p style="color:red; font-weight:bold;">🔼 증가</p>', unsafe_allow_html=True)
-    st.dataframe(yoy_df.nlargest(5, '증감량').style.format(yoy_formatter, na_rep="-"))
-    st.markdown('<p style="color:blue; font-weight:bold;">🔽 감소</p>', unsafe_allow_html=True)
-    st.dataframe(yoy_df.nsmallest(5, '증감량').style.format(yoy_formatter, na_rep="-"))
     st.markdown("---")
 
     # --- 4. 전년 동분기 대비 분석 ---
