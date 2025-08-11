@@ -167,7 +167,7 @@ if df.empty and menu != "데이터 추가":
 if menu == "수입 현황 대시보드":
     st.title(f"📊 수입 현황 대시보드 (기준: {PRIMARY_WEIGHT_COL})")
     st.markdown("---")
-
+    st.caption("💡 선택한 시점이 비교의 기준이 됩니다.")
     analysis_df_raw = df.dropna(subset=['날짜', PRIMARY_WEIGHT_COL, '연도', '분기', '반기'])
     if analysis_df_raw.empty:
         st.warning("분석할 유효한 데이터가 없습니다. 'Year', 'Month' 데이터가 올바른지 확인해주세요.")
