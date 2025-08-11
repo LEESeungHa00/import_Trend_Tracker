@@ -213,9 +213,11 @@ if menu == "수입 현황 대시보드":
     agg_df['전년동월대비_증감률'] = (agg_df['전년동월대비_증감량'] / agg_df['전년동월_중량'].replace(0, np.nan))
     
     col1, col2 = st.columns(2)
+    
+    # --- 최종 오류 수정: '{:+,_d}' -> '{:+,d}' ---
     formatter = {
         '현재월_중량': '{:,.0f}', '전월_중량': '{:,.0f}', '전년동월_중량': '{:,.0f}',
-        '전월대비_증감량': '{:+,_d}', '전년동월대비_증감량': '{:+,_d}',
+        '전월대비_증감량': '{:+,d}', '전년동월대비_증감량': '{:+,d}',
         '전월대비_증감률': '{:+.2%}', '전년동월대비_증감률': '{:+.2%}'
     }
     
@@ -254,8 +256,7 @@ elif menu == "기간별 수입량 분석":
         elif period_type == '분기별':
             selected_period = st.selectbox("분기 선택", range(1, 5), format_func=lambda x: f"{x}분기")
             period_col = '분기'
-        else: # 반기별
-            # --- 최종 수정: '상반기'/'하반기' 표시 ---
+        else:
             selected_period = st.selectbox(
                 "반기 선택",
                 options=[1, 2],
