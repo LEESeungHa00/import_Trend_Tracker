@@ -129,34 +129,10 @@ def create_sample_data():
     df = preprocess_dataframe(df)
     return df
 
-def update_sheet_in_batches(worksheet, dataframe, batch_size=10000):
-    """데이터프레임을 작은 배치로 나누어 구글 시트에 업로드합니다."""
+def update_sheet_in_batches(worksheet, dataframe):
     worksheet.clear()
-    
-    # 헤더 추가
-    worksheet.append_row(dataframe.columns.values.tolist())
-    
-    data = dataframe.fillna('').values.tolist()
-    total_rows = len(data)
-    
-    if total_rows == 0:
-        st.success("✅ 업로드 완료! (데이터 없음)")
-        return
-
-    progress_bar = st.progress(0, text="데이터 업로드를 시작합니다...")
-    
-    # 데이터를 배치 단위로 나누어 업로드
-    for i in range(0, total_rows, batch_size):
-        batch = data[i:i+batch_size]
-        worksheet.append_rows(batch, value_input_option='USER_ENTERED')
-        
-        progress_percentage = min((i + batch_size) / total_rows, 1.0)
-        progress_text = f"{min(i + batch_size, total_rows)} / {total_rows} 행 업로드 중..."
-        progress_bar.progress(progress_percentage, text=progress_text)
-        
-        time.sleep(1) # 구글 API 속도 제한을 피하기 위한 짧은 대기
-        
-    progress_bar.progress(1.0, text="✅ 업로드 완료!")
+    worksheet.update([dataframe.columns.values.tolist()] + dataframe.fillna('').values.tolist(), value_input_option='USER_ENTERED')
+    st.success("✅ 데이터베이스 업로드 완료!")
     
 # ---------------------------------
 # ---- 메인 애플리케이션 로직 ----
@@ -190,6 +166,7 @@ if menu == "수입 현황 대시보드":
     available_months = sorted(analysis_df_raw['월'].unique().astype(int))
     latest_date = analysis_df_raw['날짜'].max()
 
+    # ★★★ 여기가 수정된 부분입니다 (Altair 차트 함수) ★★★
     def create_mirrored_bar_chart_altair(df_agg, base_col, prev_col, base_label, prev_label):
         top_items = df_agg.nlargest(5, '증감량(KG)')
         bottom_items = df_agg.nsmallest(5, '증감량(KG)')
@@ -202,32 +179,59 @@ if menu == "수입 현황 대시보드":
         chart_data = chart_data.reset_index()
         df_melted = chart_data.melt(
             id_vars='대표품목별', value_vars=[prev_col, base_col],
-            var_name='시점', value_name='수입량(KG)'
+            var_name='시점_컬럼명', value_name='수입량(KG)'
         )
         
         df_melted['차트_값'] = df_melted.apply(
-            lambda row: -row['수입량(KG)'] if row['시점'] == prev_col else row['수입량(KG)'],
+            lambda row: -row['수입량(KG)'] if row['시점_컬럼명'] == prev_col else row['수입량(KG)'],
             axis=1
         )
         
-        sort_order = chart_data.sort_values('증감량(KG)', ascending=False)['대표품목별'].tolist()
+        df_melted['시점'] = df_melted['시점_컬럼명'].map({prev_col: prev_label, base_col: base_label})
         
-        chart = alt.Chart(df_melted).mark_bar().encode(
-            x=alt.X('차트_값:Q', title='수입량 (KG)', axis=alt.Axis(labelExpr="abs(datum.value)")),
+        sort_order = chart_data.sort_values('증감량(KG)', ascending=False)['대표품목별'].tolist()
+
+        # X축의 최대값을 계산하여 양쪽 축의 범위를 동일하게 설정
+        max_val = df_melted['수입량(KG)'].max()
+        
+        base = alt.Chart(df_melted).encode(
+            y=alt.Y('대표품목별:N', sort=sort_order, title=None)
+        )
+        
+        color_scale = alt.Scale(domain=[prev_label, base_label], range=['#5f8ad6', '#d65f5f'])
+
+        left_chart = base.transform_filter(
+            alt.datum.시점 == prev_label
+        ).mark_bar().encode(
+            x=alt.X('수입량(KG):Q', title='수입량 (KG)', scale=alt.Scale(domain=[0, max_val]), sort=alt.SortOrder('descending')),
+            color=alt.Color('시점:N', scale=color_scale, legend=None),
+            tooltip=['대표품목별', '시점', alt.Tooltip('수입량(KG)', format=',.0f')]
+        )
+
+        right_chart = base.transform_filter(
+            alt.datum.시점 == base_label
+        ).mark_bar().encode(
+            x=alt.X('수입량(KG):Q', title='수입량 (KG)', scale=alt.Scale(domain=[0, max_val])),
+            color=alt.Color('시점:N', scale=color_scale, legend=alt.Legend(title='시점 구분')),
+            tooltip=['대표품목별', '시점', alt.Tooltip('수입량(KG)', format=',.0f')]
+        )
+        
+        # 중앙에 품목 레이블 추가
+        middle_text = base.mark_text(align='center', baseline='middle').encode(
             y=alt.Y('대표품목별:N', sort=sort_order, title=None),
-            color=alt.Color('시점:N',
-                scale=alt.Scale(domain=[prev_label, base_label], range=['#5f8ad6', '#d65f5f']),
-                legend=alt.Legend(title="시점 구분")
-            ),
-            tooltip=[
-                alt.Tooltip('대표품목별', title='품목'),
-                alt.Tooltip('시점', title='기간'),
-                alt.Tooltip('수입량(KG)', title='수입량', format=',.0f')
-            ]
+            text='대표품목별:N'
+        ).transform_filter(
+            alt.datum.시점 == base_label
+        )
+
+        # 차트 결합
+        final_chart = alt.hconcat(left_chart, middle_text, right_chart, spacing=5).configure_view(
+            strokeWidth=0
         ).properties(
             title=alt.TitleParams(text=f'{base_label} vs {prev_label} 수입량 비교', anchor='middle')
         )
-        st.altair_chart(chart.interactive(), use_container_width=True)
+
+        st.altair_chart(final_chart, use_container_width=True)
 
     # --- 1. 전년 대비 분석 ---
     st.subheader("🆚 전년 대비")
@@ -241,7 +245,7 @@ if menu == "수입 현황 대시보드":
     yy_df['증감량(KG)'] = yy_df['기준연도_중량(KG)'] - yy_df['전년도_중량(KG)']
     yy_df['증감률'] = yy_df['증감량(KG)'] / yy_df['전년도_중량(KG)'].replace(0, np.nan)
     with st.expander("📊 좌우 비교 시각화"):
-        create_mirrored_bar_chart_altair(yy_df, '기준연도_중량(KG)', '전년도_중량(KG)', f'{yy_year-1}년', f'{yy_year}년')
+        create_mirrored_bar_chart_altair(yy_df, '기준연도_중량(KG)', '전년도_중량(KG)', f'{yy_year}년', f'{yy_year-1}년')
     yy_formatter = {'기준연도_중량(KG)': '{:,.0f}', '전년도_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
     st.markdown('<p style="color:red; font-weight:bold;">🔼 수입량 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
     st.dataframe(yy_df.nlargest(5, '증감량(KG)').style.format(yy_formatter, na_rep="-"))
@@ -267,7 +271,7 @@ if menu == "수입 현황 대시보드":
     mom_df['증감량(KG)'] = mom_df['기준월_중량(KG)'] - mom_df['전월_중량(KG)']
     mom_df['증감률'] = mom_df['증감량(KG)'] / mom_df['전월_중량(KG)'].replace(0, np.nan)
     with st.expander("📊 좌우 비교 시각화"):
-        create_mirrored_bar_chart_altair(mom_df, '기준월_중량(KG)', '전월_중량(KG)', f'{prev_month_date.year}년 {prev_month_date.month}월', f'{mom_year}년 {mom_month}월')
+        create_mirrored_bar_chart_altair(mom_df, '기준월_중량(KG)', '전월_중량(KG)', f'{mom_year}년 {mom_month}월', f'{prev_month_date.year}년 {prev_month_date.month}월')
     mom_formatter = {'기준월_중량(KG)': '{:,.0f}', '전월_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
     st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
     st.dataframe(mom_df.nlargest(5, '증감량(KG)').style.format(mom_formatter, na_rep="-"))
@@ -291,7 +295,7 @@ if menu == "수입 현황 대시보드":
     yoy_df['증감량(KG)'] = yoy_df['기준월_중량(KG)'] - yoy_df['전년동월_중량(KG)']
     yoy_df['증감률'] = yoy_df['증감량(KG)'] / yoy_df['전년동월_중량(KG)'].replace(0, np.nan)
     with st.expander("📊 좌우 비교 시각화"):
-        create_mirrored_bar_chart_altair(yoy_df, '기준월_중량(KG)', '전년동월_중량(KG)', f'{yoy_year-1}년 {yoy_month}월', f'{yoy_year}년 {yoy_month}월')
+        create_mirrored_bar_chart_altair(yoy_df, '기준월_중량(KG)', '전년동월_중량(KG)', f'{yoy_year}년 {yoy_month}월', f'{yoy_year-1}년 {yoy_month}월')
     yoy_formatter = {'기준월_중량(KG)': '{:,.0f}', '전년동월_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
     st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
     st.dataframe(yoy_df.nlargest(5, '증감량(KG)').style.format(yoy_formatter, na_rep="-"))
@@ -316,7 +320,7 @@ if menu == "수입 현황 대시보드":
     qoq_df['증감량(KG)'] = qoq_df['기준분기_중량(KG)'] - qoq_df['전년동분기_중량(KG)']
     qoq_df['증감률'] = qoq_df['증감량(KG)'] / qoq_df['전년동분기_중량(KG)'].replace(0, np.nan)
     with st.expander("📊 좌우 비교 시각화"):
-        create_mirrored_bar_chart_altair(qoq_df, '기준분기_중량(KG)', '전년동분기_중량(KG)', f'{q_year-1}년 {q_quarter}분기', f'{q_year}년 {q_quarter}분기')
+        create_mirrored_bar_chart_altair(qoq_df, '기준분기_중량(KG)', '전년동분기_중량(KG)', f'{q_year}년 {q_quarter}분기', f'{q_year-1}년 {q_quarter}분기')
     q_formatter = {'기준분기_중량(KG)': '{:,.0f}', '전년동분기_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
     st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
     st.dataframe(qoq_df.nlargest(5, '증감량(KG)').style.format(q_formatter, na_rep="-"))
@@ -342,7 +346,7 @@ if menu == "수입 현황 대시보드":
     hoh_df['증감량(KG)'] = hoh_df['기준반기_중량(KG)'] - hoh_df['전년동반기_중량(KG)']
     hoh_df['증감률'] = hoh_df['증감량(KG)'] / hoh_df['전년동반기_중량(KG)'].replace(0, np.nan)
     with st.expander("📊 좌우 비교 시각화"):
-        create_mirrored_bar_chart_altair(hoh_df, '기준반기_중량(KG)', '전년동반기_중량(KG)', f'{h_year-1}년 {half_display(h_half)}', f'{h_year}년 {half_display(h_half)}')
+        create_mirrored_bar_chart_altair(hoh_df, '기준반기_중량(KG)', '전년동반기_중량(KG)', f'{h_year}년 {half_display(h_half)}', f'{h_year-1}년 {half_display(h_half)}')
     h_formatter = {'기준반기_중량(KG)': '{:,.0f}', '전년동반기_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
     st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
     st.dataframe(hoh_df.nlargest(5, '증감량(KG)').style.format(h_formatter, na_rep="-"))
