@@ -177,7 +177,7 @@ if menu == "수입 현황 대시보드":
     latest_year = latest_date.year
     latest_month = latest_date.month
 
-    st.header(f"🥇 {latest_year}년 누적 수입량 TOP 5 품목")
+    st.header(f"🏆 {latest_year}년 누적 수입량 TOP 5 품목")
     top5_this_year = analysis_df_raw[analysis_df_raw['연도'] == latest_year].groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum().nlargest(5)
     cols = st.columns(5)
     for i, (item, weight) in enumerate(top5_this_year.items()):
@@ -218,25 +218,25 @@ if menu == "수입 현황 대시보드":
     col1, col2 = st.columns(2)
     with col1:
         st.subheader(f"🆚 전월 대비 (vs {prev_month_date.month}월)")
-        # --- 개선 사항 1: 색상 및 포맷팅 적용 ---
-        st.markdown('<p style="color:red; font-weight:bold;">🔼 수입량 증가 TOP 5</p>', unsafe_allow_html=True)
+        
+        st.markdown('🔺수입량 증가 TOP 5')
         st.dataframe(agg_df.nlargest(5, '전월대비_증감량')[['현재월_중량', '전월_중량', '전월대비_증감량', '전월대비_증감률']].style.format({
             '현재월_중량': '{:,.0f}', '전월_중량': '{:,.0f}', '전월대비_증감량': '{:+,_d}', '전월대비_증감률': '{:+.2%}'
         }).format(na_rep="-"))
         
-        st.markdown('<p style="color:blue; font-weight:bold;">🔽 수입량 감소 TOP 5</p>', unsafe_allow_html=True)
+        st.markdown('🔻수입량 감소 TOP 5')
         st.dataframe(agg_df.nsmallest(5, '전월대비_증감량')[['현재월_중량', '전월_중량', '전월대비_증감량', '전월대비_증감률']].style.format({
             '현재월_중량': '{:,.0f}', '전월_중량': '{:,.0f}', '전월대비_증감량': '{:+,_d}', '전월대비_증감률': '{:+.2%}'
         }).format(na_rep="-"))
 
     with col2:
         st.subheader(f"🆚 전년 동월 대비 (vs {prev_year_date.year}년)")
-        st.markdown('<p style="color:red; font-weight:bold;">🔼 수입량 증가 TOP 5</p>', unsafe_allow_html=True)
+        st.markdown('🔺수입량 증가 TOP 5')
         st.dataframe(agg_df.nlargest(5, '전년동월대비_증감량')[['현재월_중량', '전년동월_중량', '전년동월대비_증감량', '전년동월대비_증감률']].style.format({
             '현재월_중량': '{:,.0f}', '전년동월_중량': '{:,.0f}', '전년동월대비_증감량': '{:+,_d}', '전년동월대비_증감률': '{:+.2%}'
         }).format(na_rep="-"))
         
-        st.markdown('<p style="color:blue; font-weight:bold;">🔽 수입량 감소 TOP 5</p>', unsafe_allow_html=True)
+        st.markdown('🔻수입량 감소 TOP 5')
         st.dataframe(agg_df.nsmallest(5, '전년동월대비_증감량')[['현재월_중량', '전년동월_중량', '전년동월대비_증감량', '전년동월대비_증감률']].style.format({
             '현재월_중량': '{:,.0f}', '전년동월_중량': '{:,.0f}', '전년동월대비_증감량': '{:+,_d}', '전년동월대비_증감률': '{:+.2%}'
         }).format(na_rep="-"))
