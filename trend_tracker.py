@@ -24,7 +24,7 @@ DESIRED_HEADER = [
     '수입용도별', '대표품목별', '총 중량(KG)', '총 금액($)', '적합 중량(KG)',
     '적합 금액($)', '부적합 중량(KG)', '부적합 금액($)'
 ]
-GOOGLE_SHEET_NAME = "수입실적_DB"
+GOOGLE_SHEET_NAME = "수입실적_데이터베이스"  # 본인의 구글 시트 이름으로 변경
 WORKSHEET_NAME = "월별통합"
 
 # ---------------------------------
@@ -64,22 +64,19 @@ def preprocess_dataframe(df):
     for col in numeric_cols:
         if col in df_copy.columns:
             df_copy[col] = pd.to_numeric(
-                df_copy[col].astype(str).str.replace(',', ''), 
+                df_copy[col].astype(str).str.replace(',', ''),
                 errors='coerce'
             ).fillna(0)
 
-    # 'Year', 'Month' 컬럼이 존재할 경우에만 처리
     if 'Year' in df_copy.columns and 'Month' in df_copy.columns:
         df_copy['Year'] = pd.to_numeric(df_copy['Year'], errors='coerce')
         df_copy['Month'] = pd.to_numeric(df_copy['Month'], errors='coerce')
 
-        # '날짜' 컬럼 생성 (잘못된 값이 있어도 NaT로 처리되어 에러 방지)
         df_copy['날짜'] = pd.to_datetime(
             df_copy['Year'].astype('Int64').astype(str) + '-' + df_copy['Month'].astype('Int64').astype(str) + '-01',
             errors='coerce'
         )
 
-        # 날짜가 유효한 경우에만 파생 컬럼 생성
         valid_dates = df_copy['날짜'].notna()
         df_copy.loc[valid_dates, '연도'] = df_copy.loc[valid_dates, '날짜'].dt.year
         df_copy.loc[valid_dates, '월'] = df_copy.loc[valid_dates, '날짜'].dt.month
@@ -100,14 +97,13 @@ def load_data():
         sheet = client.open(GOOGLE_SHEET_NAME).worksheet(WORKSHEET_NAME)
         all_data = sheet.get_all_values()
 
-        if not all_data:
-            st.info("시트가 비어있습니다.")
+        if not all_data or len(all_data) < 2:
+            st.info("시트에 헤더 또는 데이터가 없습니다.")
             return pd.DataFrame()
 
         header = all_data[0]
         data = all_data[1:]
 
-        # 헤더 유효성 검사
         desired_set = set(DESIRED_HEADER)
         header_set = set(header)
         if desired_set != header_set:
@@ -149,7 +145,7 @@ def create_sample_data():
                 item, weight, price, weight*0.95, price*0.95, weight*0.05, price*0.05
             ])
             no_counter += 1
-    
+
     df = pd.DataFrame(data, columns=DESIRED_HEADER)
     df = preprocess_dataframe(df)
     return df
@@ -157,10 +153,10 @@ def create_sample_data():
 # ---------------------------------
 # 대용량 데이터 업로드 함수
 # ---------------------------------
-def update_sheet_in_batches(worksheet, dataframe, batch_size=5000):
-    """데이터프레임을 작은 배치로 나누어 구글 시트에 업로드합니다."""
+def update_sheet_in_batches(worksheet, dataframe):
+    """데이터프레임을 구글 시트에 업로드합니다."""
     worksheet.clear()
-    worksheet.update([dataframe.columns.values.tolist()] + dataframe.fillna('').values.tolist())
+    worksheet.update([dataframe.columns.values.tolist()] + dataframe.fillna('').values.tolist(), value_input_option='USER_ENTERED')
     st.success("✅ 데이터베이스 업로드 완료!")
 
 
@@ -168,7 +164,6 @@ def update_sheet_in_batches(worksheet, dataframe, batch_size=5000):
 # ---- 메인 애플리케이션 로직 ----
 # ---------------------------------
 
-# 사이드바
 st.sidebar.title("메뉴")
 menu = st.sidebar.radio(
     "원하는 기능을 선택하세요.",
@@ -178,15 +173,12 @@ if st.sidebar.button("🔄 데이터 새로고침"):
     st.cache_data.clear()
     st.rerun()
 
-# 데이터 로딩
 df = load_data()
 
-# 데이터가 없을 경우 메시지 표시
 if df.empty and menu != "데이터 추가":
-    st.warning("데이터가 없습니다. '데이터 추가' 탭으로 이동하여 엑셀 파일을 업로드해주세요.")
+    st.warning("데이터가 없습니다. '데이터 추가' 탭으로 이동하여 데이터를 업로드해주세요.")
     st.stop()
 
-# 1. 수입 현황 대시보드
 if menu == "수입 현황 대시보드":
     st.title(f"📊 수입 현황 대시보드 (기준: {PRIMARY_WEIGHT_COL})")
     st.markdown("---")
@@ -202,14 +194,14 @@ if menu == "수입 현황 대시보드":
 
     st.header(f"🏆 {latest_year}년 누적 수입량 TOP 5 품목")
     top5_this_year = analysis_df_raw[analysis_df_raw['연도'] == latest_year].groupby('대표품목별')[PRIMARY_WEIGHT_COL].sum().nlargest(5)
-    cols = st.columns(len(top5_this_year) if len(top5_this_year) > 0 else 1)
+    cols = st.columns(len(top5_this_year) or 1)
     for i, (item, weight) in enumerate(top5_this_year.items()):
         with cols[i]:
             st.metric(label=f"{i+1}. {item}", value=f"{weight:,.0f} kg")
 
     st.markdown("---")
     st.header(f"📈 {latest_year}년 {latest_month}월 수입량 증감 분석")
-    
+
     current_month_start = datetime(latest_year, latest_month, 1)
     prev_month_date = current_month_start - pd.DateOffset(months=1)
     prev_year_date = current_month_start - pd.DateOffset(years=1)
@@ -228,27 +220,22 @@ if menu == "수입 현황 대시보드":
 
     agg_df = pd.DataFrame(current_agg).rename(columns={PRIMARY_WEIGHT_COL: '현재월_중량'})
     agg_df = agg_df.join(prev_month_agg.rename('전월_중량'), how='outer')
-    agg_df = agg_df.join(prev_year_agg.rename('전년동월_중량'), how='outer')
-    agg_df.fillna(0, inplace=True)
+    agg_df = agg_df.join(prev_year_agg.rename('전년동월_중량'), how='outer').fillna(0)
 
     agg_df['전월대비_증감량'] = agg_df['현재월_중량'] - agg_df['전월_중량']
     agg_df['전년동월대비_증감량'] = agg_df['현재월_중량'] - agg_df['전년동월_중량']
-    agg_df['전월대비_증감률'] = (agg_df['전월대비_증감량'] / agg_df['전월_중량'].replace(0, np.nan))
-    agg_df['전년동월대비_증감률'] = (agg_df['전년동월대비_증감량'] / agg_df['전년동월_중량'].replace(0, np.nan))
-    
+    agg_df['전월대비_증감률'] = agg_df['전월대비_증감량'] / agg_df['전월_중량'].replace(0, np.nan)
+    agg_df['전년동월대비_증감률'] = agg_df['전년동월대비_증감량'] / agg_df['전년동월_중량'].replace(0, np.nan)
+
     col1, col2 = st.columns(2)
-    
-    formatter = {
-        '현재월_중량': '{:,.0f}', '전월_중량': '{:,.0f}', '전년동월_중량': '{:,.0f}',
-        '전월대비_증감량': '{:+,.0f}', '전년동월대비_증감량': '{:+,.0f}',
-        '전월대비_증감률': '{:+.2%}', '전년동월대비_증감률': '{:+.2%}'
-    }
-    
+    formatter = {'현재월_중량': '{:,.0f}', '전월_중량': '{:,.0f}', '전년동월_중량': '{:,.0f}',
+                 '전월대비_증감량': '{:+,.0f}', '전년동월대비_증감량': '{:+,.0f}',
+                 '전월대비_증감률': '{:+.2%}', '전년동월대비_증감률': '{:+.2%}'}
+
     with col1:
         st.subheader(f"🆚 전월 대비 (vs {prev_month_date.month}월)")
         st.markdown('<p style="color:red; font-weight:bold;">🔼 수입량 증가 TOP 5</p>', unsafe_allow_html=True)
         st.dataframe(agg_df.nlargest(5, '전월대비_증감량')[['현재월_중량', '전월_중량', '전월대비_증감량', '전월대비_증감률']].style.format(formatter, na_rep="-"))
-        
         st.markdown('<p style="color:blue; font-weight:bold;">🔽 수입량 감소 TOP 5</p>', unsafe_allow_html=True)
         st.dataframe(agg_df.nsmallest(5, '전월대비_증감량')[['현재월_중량', '전월_중량', '전월대비_증감량', '전월대비_증감률']].style.format(formatter, na_rep="-"))
 
@@ -256,11 +243,12 @@ if menu == "수입 현황 대시보드":
         st.subheader(f"🆚 전년 동월 대비 (vs {prev_year_date.year}년)")
         st.markdown('<p style="color:red; font-weight:bold;">🔼 수입량 증가 TOP 5</p>', unsafe_allow_html=True)
         st.dataframe(agg_df.nlargest(5, '전년동월대비_증감량')[['현재월_중량', '전년동월_중량', '전년동월대비_증감량', '전년동월대비_증감률']].style.format(formatter, na_rep="-"))
-        
         st.markdown('<p style="color:blue; font-weight:bold;">🔽 수입량 감소 TOP 5</p>', unsafe_allow_html=True)
         st.dataframe(agg_df.nsmallest(5, '전년동월대비_증감량')[['현재월_중량', '전년동월_중량', '전년동월대비_증감량', '전년동월대비_증감률']].style.format(formatter, na_rep="-"))
 
-# 2. 기간별 수입량 분석
+# ----------------------------------------------------------------
+# ★★★ 여기가 수정된 부분입니다 ★★★
+# ----------------------------------------------------------------
 elif menu == "기간별 수입량 분석":
     st.title(f"📆 기간별 수입량 변화 분석 (기준: {PRIMARY_WEIGHT_COL})")
     st.markdown("---")
@@ -283,65 +271,74 @@ elif menu == "기간별 수입량 분석":
         else:
             selected_period = st.selectbox("반기 선택", options=[1, 2], format_func=lambda x: '상반기' if x == 1 else '하반기')
             period_col = '반기'
-    
+
     period_df = analysis_df[analysis_df[period_col] == selected_period]
     pivot_df = period_df.pivot_table(index='대표품목별', columns='연도', values=PRIMARY_WEIGHT_COL, aggfunc='sum').fillna(0)
     pivot_df['변화폭(표준편차)'] = pivot_df.std(axis=1)
     pivot_df.sort_values('변화폭(표준편차)', ascending=False, inplace=True)
-    
+
     st.header("📈 품목별 연도별 수입량 추이 비교")
-    
+
+    # 1. session_state에 선택 목록이 없으면 빈 리스트로 초기화
     if 'selected_items_memory' not in st.session_state:
         st.session_state.selected_items_memory = []
 
     top_items = pivot_df.index.tolist()
-    valid_selection = [item for item in st.session_state.selected_items_memory if item in top_items]
-    if not valid_selection and top_items:
-        valid_selection = top_items[:min(5, len(top_items))]
-    st.session_state.selected_items_memory = valid_selection
 
+    # 2. 현재 선택 가능한 품목(top_items)을 기준으로, 기억된 선택 목록을 필터링
+    #    (예: 1월에만 있던 품목을 선택 후 2월로 바꾸면, 해당 품목은 선택 해제됨)
+    st.session_state.selected_items_memory = [
+        item for item in st.session_state.selected_items_memory if item in top_items
+    ]
+
+    # 3. multiselect 위젯을 생성. default 값으로 session_state에 저장된 값을 사용
     selected_items = st.multiselect(
         "품목 선택 (최대 5개)",
         options=top_items,
-        placeholder="수입량을 확인할 품목을 선택해주세요",
+        placeholder="수입량을 비교할 품목을 선택해주세요",
         default=st.session_state.selected_items_memory,
         max_selections=5
     )
+
+    # 4. 사용자가 위젯에서 선택한 최신 값을 다시 session_state에 저장
     st.session_state.selected_items_memory = selected_items
 
     if selected_items:
         chart_type = st.radio("차트 종류", ('선 그래프', '막대 그래프'), horizontal=True)
         chart_data = pivot_df.loc[selected_items].drop(columns=['변화폭(표준편차)'])
-        
-        if chart_type == '선 그래프': st.line_chart(chart_data.T)
-        else: st.bar_chart(chart_data.T)
-        
+
+        if chart_type == '선 그래프':
+            st.line_chart(chart_data.T)
+        else:
+            st.bar_chart(chart_data.T)
+
         with st.expander("데이터 상세 보기"):
             st.subheader("연도별 수입량 (KG)")
             st.dataframe(chart_data.style.format("{:,.0f}"))
-            
+
             st.subheader("전년 대비 증감률 (%)")
             growth_rate_df = chart_data.pct_change(axis='columns')
             st.dataframe(growth_rate_df.style.format("{:+.2%}", na_rep="-"))
+# ----------------------------------------------------------------
+# ★★★ 수정된 부분 끝 ★★★
+# ----------------------------------------------------------------
 
-# 3. 데이터 추가
 elif menu == "데이터 추가":
     st.title("📤 데이터 추가")
     st.info(f"다음 컬럼을 포함한 엑셀/CSV 파일을 업로드해주세요:\n`{', '.join(DESIRED_HEADER)}`")
-    
+
     uploaded_file = st.file_uploader("파일 선택", type=['xlsx', 'csv'])
     password = st.text_input("업로드 비밀번호", type="password")
 
     if st.button("데이터베이스에 추가"):
-        if uploaded_file and password == "1004": # 비밀번호는 실제 환경에 맞게 변경하세요.
+        if uploaded_file and password == "1004":  # 비밀번호는 실제 환경에 맞게 변경하세요.
             try:
                 st.info("파일을 읽고 처리하는 중입니다...")
                 if uploaded_file.name.endswith('.csv'):
                     new_df = pd.read_csv(uploaded_file, dtype=str)
                 else:
                     new_df = pd.read_excel(uploaded_file, dtype=str)
-                
-                # 업로드 파일 헤더 검사
+
                 desired_set = set(DESIRED_HEADER)
                 new_df_set = set(new_df.columns)
                 if desired_set != new_df_set:
@@ -356,22 +353,22 @@ elif menu == "데이터 추가":
                     st.stop()
 
                 new_df_processed = preprocess_dataframe(new_df)
-                
+
                 client = get_google_sheet_client()
                 if client:
                     sheet = client.open(GOOGLE_SHEET_NAME).worksheet(WORKSHEET_NAME)
                     
-                    # 기존 데이터와 새 데이터 병합 (중복 월 제거)
                     unique_periods = new_df_processed.dropna(subset=['연도', '월'])[['연도', '월']].drop_duplicates()
                     df_filtered = df.copy()
                     if not df_filtered.empty and not unique_periods.empty:
                         for _, row in unique_periods.iterrows():
-                            df_filtered = df_filtered[~((df_filtered['연도'] == row['연도']) & (df_filtered['월'] == row['월']))]
-                    
+                            year_val = row['연도']
+                            month_val = row['월']
+                            df_filtered = df_filtered[~((df_filtered['연도'] == year_val) & (df_filtered['월'] == month_val))]
+
                     combined_df = pd.concat([df_filtered, new_df_processed], ignore_index=True)
                     combined_df.sort_values(by=['Year', 'Month', 'NO'], inplace=True, na_position='last')
-                    
-                    # 시트에 쓸 데이터는 최종적으로 DESIRED_HEADER 순서에 맞춤
+
                     df_to_write = combined_df.reindex(columns=DESIRED_HEADER)
 
                     update_sheet_in_batches(sheet, df_to_write)
