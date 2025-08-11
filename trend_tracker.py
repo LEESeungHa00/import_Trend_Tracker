@@ -71,11 +71,6 @@ def preprocess_dataframe(df):
     df['분기'] = df['날짜'].dt.quarter
     df['반기'] = (df['날짜'].dt.month - 1) // 6 + 1
 
-    # <--- 수정된 부분 ---
-    # 데이터프레임의 컬럼 순서를 DESIRED_HEADER에 맞게 재정렬
-    if not df.empty:
-        df = df.reindex(columns=DESIRED_HEADER)
-    # --- 수정 끝 ---
     
     return df
 
