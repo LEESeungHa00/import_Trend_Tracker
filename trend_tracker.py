@@ -539,7 +539,7 @@ elif menu == "기간별 수입량 분석":
         
         base_chart = alt.Chart(df_melted).encode(
             x=alt.X('기간:N', sort=None, title='기간'),
-            y=alt.Y('수입량(KG):Q', title='수입량 (KG)'),
+            y=alt.Y('수입량(KG):Q', title='수입량 (KG)',axis=alt.Axis(format='~s')),
             color='대표품목별:N',
             tooltip=['기간', '대표품목별', alt.Tooltip('툴팁_내용', title='수입량')]
         )
