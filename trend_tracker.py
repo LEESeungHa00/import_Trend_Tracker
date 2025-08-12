@@ -380,8 +380,8 @@ elif menu == "시계열 추세 분석":
             if len(group['연도'].unique()) == duration_years :
                 group = group.sort_values('연도')
                 diffs = group[PRIMARY_WEIGHT_COL].diff().dropna()
-                if (trend_type_years == "지속 증가 📈" and (diffs>0).all()) or |
-                   (trend_tupe_years == "지속 감소 📉" and (diffs <0).all()):
+                if (trend_type_years == "지속 증가 📈" and (diffs > 0).all()) or \
+                   (trend_type_years == "지속 감소 📉" and (diffs < 0).all()):
                         start_val = group.iloc[0][PRIMARY_WEIGHT_COL]
                     end_val = group.iloc[-1][PRIMARY_WEIGHT_COL]
                     growth_rate = (end_val - start_val) / start_val if start_val > 0 else (np.inf if end_val > 0 else 0)
