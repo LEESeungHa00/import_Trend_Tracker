@@ -177,7 +177,8 @@ if df.empty and menu != "데이터 추가":
     st.stop()
 
 if menu == "수입 현황 대시보드":
-    st.title(f"📊 수입 현황 대시보드 (기준: {PRIMARY_WEIGHT_COL})")
+    st.title(f"📊 수입 현황 대시보드")
+    st.info(f"(기준: {PRIMARY_WEIGHT_COL})")
 
     analysis_df_raw = df.dropna(subset=['날짜', PRIMARY_WEIGHT_COL, '연도', '분기', '반기'])
     if analysis_df_raw.empty:
