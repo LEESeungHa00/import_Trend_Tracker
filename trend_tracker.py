@@ -11,7 +11,7 @@ import altair as alt
 # 페이지 기본 설정
 # ---------------------------------
 st.set_page_config(
-    page_title="수입량 증감 품목 알리미",
+    page_title="수입량 증감 품목 분석",
     page_icon="📊",
     layout="wide",
 )
