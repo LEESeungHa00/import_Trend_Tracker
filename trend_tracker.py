@@ -243,9 +243,9 @@ if menu == "수입 현황 대시보드":
             create_butterfly_chart_altair(yy_df, '기준연도_중량(KG)', '전년도_중량(KG)', f'{yy_year}년', f'{yy_year-1}년')
         yy_formatter = {'제품명':'대표품목별','기준연도_중량(KG)': '{:,.0f}', '전년도_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
         st.markdown('<p style="color:red; font-weight:bold;">🔼 수입량 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(yy_df.nlargest(5, '증감량(KG)').style.format(yy_formatter, na_rep="-"),hide_index=True)
+        st.dataframe(yy_df.nlargest(5, '증감량(KG)').reset_index().style.format(yy_formatter, na_rep="-"),hide_index=True)
         st.markdown('<p style="color:blue; font-weight:bold;">🔽 수입량 감소 TOP 5 (감소량 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(yy_df.nsmallest(5, '증감량(KG)').style.format(yy_formatter, na_rep="-"),hide_index=True)
+        st.dataframe(yy_df.nsmallest(5, '증감량(KG)').reset_index().style.format(yy_formatter, na_rep="-"),hide_index=True)
 
     with tab_mom:
         st.subheader("🆚 전월 대비 수입량 분석")
@@ -268,9 +268,9 @@ if menu == "수입 현황 대시보드":
             create_butterfly_chart_altair(mom_df, '기준월_중량(KG)', '전월_중량(KG)', f'{mom_year}년 {mom_month}월', f'{prev_month_date.year}년 {prev_month_date.month}월')
         mom_formatter = {'기준월_중량(KG)': '{:,.0f}', '전월_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
         st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(mom_df.nlargest(5, '증감량(KG)').style.format(mom_formatter, na_rep="-"),hide_index=True)
+        st.dataframe(mom_df.nlargest(5, '증감량(KG)').reset_index().style.format(mom_formatter, na_rep="-"),hide_index=True)
         st.markdown('<p style="color:blue; font-weight:bold;">🔽 감소 TOP 5 (감소량 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(mom_df.nsmallest(5, '증감량(KG)').style.format(mom_formatter, na_rep="-"),hide_index=True)
+        st.dataframe(mom_df.nsmallest(5, '증감량(KG)').reset_index().style.format(mom_formatter, na_rep="-"),hide_index=True)
 
     with tab_yoy:
         st.subheader("🆚 전년 동월 대비 수입량 분석")
@@ -291,9 +291,9 @@ if menu == "수입 현황 대시보드":
             create_butterfly_chart_altair(yoy_df, '기준월_중량(KG)', '전년동월_중량(KG)', f'{yoy_year}년 {yoy_month}월', f'{yoy_year-1}년 {yoy_month}월')
         yoy_formatter = {'기준월_중량(KG)': '{:,.0f}', '전년동월_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
         st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(yoy_df.nlargest(5, '증감량(KG)').style.format(yoy_formatter, na_rep="-"),hide_index=True)
+        st.dataframe(yoy_df.nlargest(5, '증감량(KG)').reset_index().style.format(yoy_formatter, na_rep="-"),hide_index=True)
         st.markdown('<p style="color:blue; font-weight:bold;">🔽 감소 TOP 5 (감소량 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(yoy_df.nsmallest(5, '증감량(KG)').style.format(yoy_formatter, na_rep="-"),hide_index=True)
+        st.dataframe(yoy_df.nsmallest(5, '증감량(KG)').reset_index().style.format(yoy_formatter, na_rep="-"),hide_index=True)
 
     with tab_qoq:
         st.subheader("🆚 전년 동분기 대비 수입량 분석")
@@ -315,9 +315,9 @@ if menu == "수입 현황 대시보드":
             create_butterfly_chart_altair(qoq_df, '기준분기_중량(KG)', '전년동분기_중량(KG)', f'{q_year}년 {q_quarter}분기', f'{q_year-1}년 {q_quarter}분기')
         q_formatter = {'기준분기_중량(KG)': '{:,.0f}', '전년동분기_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
         st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(qoq_df.nlargest(5, '증감량(KG)').style.format(q_formatter, na_rep="-"),hide_index=True)
+        st.dataframe(qoq_df.nlargest(5, '증감량(KG)').reset_index().style.format(q_formatter, na_rep="-"),hide_index=True)
         st.markdown('<p style="color:blue; font-weight:bold;">🔽 감소 TOP 5 (감소량 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(qoq_df.nsmallest(5, '증감량(KG)').style.format(q_formatter, na_rep="-"),hide_index=True)
+        st.dataframe(qoq_df.nsmallest(5, '증감량(KG)').reset_index().style.format(q_formatter, na_rep="-"),hide_index=True)
 
     with tab_hoh:
         st.subheader("🆚 전년 동반기 대비 수입량 분석")
@@ -340,7 +340,7 @@ if menu == "수입 현황 대시보드":
             create_butterfly_chart_altair(hoh_df, '기준반기_중량(KG)', '전년동반기_중량(KG)', f'{h_year}년 {half_display(h_half)}', f'{h_year-1}년 {half_display(h_half)}')
         h_formatter = {'기준반기_중량(KG)': '{:,.0f}', '전년동반기_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
         st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(hoh_df.nlargest(5, '증감량(KG)').style.format(h_formatter, na_rep="-"),hide_index=True)
+        st.dataframe(hoh_df.nlargest(5, '증감량(KG)').reset_index().style.format(h_formatter, na_rep="-"),hide_index=True)
         st.markdown('<p style="color:blue; font-weight:bold;">🔽 감소 TOP 5 (감소량 많은 순)</p>', unsafe_allow_html=True)
         st.dataframe(hoh_df.nsmallest(5, '증감량(KG)').style.format(h_formatter, na_rep="-"),hide_index=True)
 
