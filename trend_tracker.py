@@ -217,7 +217,8 @@ if menu == "수입 현황 대시보드":
         (abs(datum.value) >= 10000 ? (datum.value / 10000) + '만' : 
         (abs(datum.value) >= 1000 ? (datum.value / 1000) + '천' : datum.value))))
         """
-    # 7. 최종 차트 생성        final_chart = alt.Chart(df_melted).mark_bar().encode(
+    # 7. 최종 차트 생성        
+        final_chart = alt.Chart(df_melted).mark_bar().encode(
             x=alt.X('차트_값:Q', title='수입량 (KG)', axis=alt.Axis(labelExpr=label_expr)),
             y=alt.Y('대표품목별:N', sort=sort_order, title=None),
             color=alt.Color('시점:N',
