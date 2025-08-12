@@ -213,7 +213,7 @@ if menu == "수입 현황 대시보드":
         label_expr = """
         datum.value == 0 ? '0' : 
         (abs(datum.value) >= 1000000 ? format(abs(datum.value) / 1000000, ',.0f') + 'M' : 
-        (abs(datum.value) >= 1000 ? format(abs(datum.value) / 1000, ',.0f') + 'K' : format(abs(datum.value)))
+        (abs(datum.value) >= 1000 ? format(abs(datum.value) / 1000, ',.0f') + 'K' : format(abs(datum.value), ',.0f')))
         """
     # 7. 최종 차트 생성        
         final_chart = alt.Chart(df_melted).mark_bar().encode(
