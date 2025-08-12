@@ -382,7 +382,8 @@ elif menu == "시계열 추세 분석":
                 diffs = group[PRIMARY_WEIGHT_COL].diff().dropna()
                 if (trend_type_years == "지속 증가 📈" and (diffs > 0).all()) or \
                    (trend_type_years == "지속 감소 📉" and (diffs < 0).all()):
-                        start_val = group.iloc[0][PRIMARY_WEIGHT_COL]
+                    
+                    start_val = group.iloc[0][PRIMARY_WEIGHT_COL]
                     end_val = group.iloc[-1][PRIMARY_WEIGHT_COL]
                     growth_rate = (end_val - start_val) / start_val if start_val > 0 else (np.inf if end_val > 0 else 0)
                     results_yearly.append({
