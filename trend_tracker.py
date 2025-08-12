@@ -351,7 +351,7 @@ if menu == "수입 현황 대시보드":
         st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
         st.dataframe(hoh_df.nlargest(5, '증감량(KG)').reset_index().style.format(h_formatter, na_rep="-"),hide_index=True)
         st.markdown('<p style="color:blue; font-weight:bold;">🔽 감소 TOP 5 (감소량 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(hoh_df.nsmallest(5, '증감량(KG)').style.format(h_formatter, na_rep="-"),hide_index=True)
+        st.dataframe(hoh_df.nsmallest(5, '증감량(KG)').reset_index().style.format(h_formatter, na_rep="-"),hide_index=True)
 
 elif menu == "시계열 추세 분석":
     st.title("📈 시계열 추세 분석")
