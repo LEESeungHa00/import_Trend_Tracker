@@ -552,7 +552,7 @@ elif menu == "기간별 수입량 분석":
             
         with st.expander("데이터 상세 보기"):
             st.subheader("기간별 수입량 (KG)")
-            st.dataframe(agg_df.style.format("{:,.0f}"),hide_index=True)
+            st.dataframe(agg_df.style.format("{:,.0f}"))
             st.subheader("이전 기간 대비 증감률 (%)")
             growth_rate_df = agg_df.pct_change()
             st.dataframe(growth_rate_df.style.format("{:+.2%}", na_rep="-"))
