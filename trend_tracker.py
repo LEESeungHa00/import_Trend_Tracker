@@ -490,23 +490,20 @@ elif menu == "기간별 수입량 분석":
         if 'selected_items_memory' not in st.session_state:
             st.session_state.selected_items_memory = []
 
-        # 2. on_change 콜백 함수 정의
-        def update_selections():
-            st.session_state.selected_items_memory = st.session_state.item_multiselect_widget
+        # 2. 현재 선택 가능한 품목(all_items)을 기준으로, 기억된 선택 목록을 필터링 (안정성 강화)
+        st.session_state.selected_items_memory = [
+            item for item in st.session_state.selected_items_memory if item in all_items
+        ]
 
-        # 3. multiselect 위젯에 key와 on_change를 할당
-        st.multiselect(
+        # 3. multiselect 위젯을 생성하고, 반환된 값을 selected_items에 저장
+        selected_items = st.multiselect(
             "품목 선택 (최대 5개)",
             options=all_items,
             placeholder="수입량 추이를 확인할 품목을 선택해주세요",
-            # default는 session_state에서 직접 가져옵니다.
             default=st.session_state.selected_items_memory,
-            max_selections=5,
-            # 위젯의 현재 상태를 저장할 고유한 key를 지정합니다.
-            key='item_multiselect_widget',
-            # 위젯의 값이 변경될 때마다 update_selections 함수를 호출합니다.
-            on_change=update_selections
+            max_selections=5
         )
+        
         
         # 4. 이후 코드에서는 항상 session_state에 저장된 값을 사용합니다.
         selected_items = st.session_state.selected_items_memory
