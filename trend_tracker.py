@@ -208,27 +208,36 @@ if menu == "수입 현황 대시보드":
         df_melted['시점'] = df_melted['시점_컬럼명'].map({prev_col: prev_label, base_col: base_label})
         sort_order = chart_data.sort_values('증감량(KG)', ascending=False)['대표품목별'].tolist()
 
-        chart = alt.Chart(df_melted).mark_bar().encode(
-            x=alt.X('차트_값:Q', title='수입량 (KG)', axis=alt.Axis(labelExpr="format(abs(datum.value), '~s')")),
-            y=alt.Y('대표품목별:N', sort=sort_order, title=None),
-            color=alt.Color('시점:N',
-                scale=alt.Scale(domain=[prev_label, base_label], range=['#5f8ad6', '#d65f5f']),
-                legend=alt.Legend(title="시점 구분", orient='top')
-            ),
-            tooltip=[
-                alt.Tooltip('대표품목별', title='품목'),
-                alt.Tooltip('시점', title='기간'),
-                alt.Tooltip('수입량(KG)', title='수입량', format=',.0f')
-            ]
-        ).properties(
-            title=alt.TitleParams(text=f'{prev_label} vs {base_label} 수입량 비교', anchor='middle')
+           
+        # JS 표현식으로 축 라벨 포맷 지정
+        label_expr = """
+        datum.value == 0 ? '0' : 
+        (abs(datum.value) >= 10000000 ? (datum.value / 10000000) + '천만' : 
+        (abs(datum.value) >= 1000000 ? (datum.value / 1000000) + '백만' : 
+        (abs(datum.value) >= 10000 ? (datum.value / 10000) + '만' : 
+        (abs(datum.value) >= 1000 ? (datum.value / 1000) + '천' : datum.value))))
+        """
+        base = alt.Chart(df_melted).encode(y=alt.Y('대표품목별:N', sort=sort_order, title=None))
+        color_scale = alt.Scale(domain=[prev_label, base_label], range=['#5f8ad6', '#d65f5f'])
+        left_chart = base.transform_filter(alt.datum.시점 == prev_label).mark_bar().encode(
+            x=alt.X('수입량(KG):Q', title='수입량 (KG)', scale=alt.Scale(domain=[0, max_val]), sort=alt.SortOrder('descending'), axis=alt.Axis(labelExpr=label_expr)),
+            color=alt.Color('시점:N', scale=color_scale, legend=None),
+            tooltip=['대표품목별', '시점', alt.Tooltip('수입량(KG)', format=',.0f')]
         )
-        st.altair_chart(chart, use_container_width=True)
+        right_chart = base.transform_filter(alt.datum.시점 == base_label).mark_bar().encode(
+            x=alt.X('수입량(KG):Q', title='수입량 (KG)', scale=alt.Scale(domain=[0, max_val]), axis=alt.Axis(labelExpr=label_expr)),
+            color=alt.Color('시점:N', scale=color_scale, legend=alt.Legend(title='시점 구분', orient='top')),
+            tooltip=['대표품목별', '시점', alt.Tooltip('수입량(KG)', format=',.0f')]
+        )
+      
+        final_chart = alt.hconcat(left_chart, right_chart, spacing=5).configure_view(
+            strokeWidth=0
+        ).properties(title=alt.TitleParams(text=f'{base_label} vs {prev_label} 수입량 비교', anchor='middle'))
+        st.altair_chart(final_chart, use_container_width=True)
 
     tab_yy, tab_mom, tab_yoy, tab_qoq, tab_hoh = st.tabs([
         "전년 대비", "전월 대비", "전년 동월 대비", "전년 동분기 대비", "전년 동반기 대비"
     ])
-
     with tab_yy:
         st.subheader("🆚 전년 대비 수입량 분석")
         yy_year = st.selectbox("기준 연도", available_years, key="yy_year", index=available_years.index(latest_date.year))
