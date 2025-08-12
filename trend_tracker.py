@@ -231,7 +231,7 @@ if menu == "수입 현황 대시보드":
                 alt.Tooltip('수입량(KG)', title='수입량', format=',.0f')
             ]
         ).properties(
-            title=alt.TitleParams(text=f'{base_label} vs {prev_label} 수입량 비교', anchor='middle')
+            title=alt.TitleParams(text=f'{prev_label} vs {base_label} 수입량 비교', anchor='middle')
         )
         
         st.altair_chart(final_chart, use_container_width=True)
