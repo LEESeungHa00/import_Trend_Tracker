@@ -75,7 +75,7 @@ def preprocess_dataframe(df):
         df_copy.loc[valid_dates, '반기'] = (df_copy.loc[valid_dates, '날짜'].dt.month - 1) // 6 + 1
     return df_copy
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600)
 def load_data():
     client = get_google_sheet_client()
     if client is None:
