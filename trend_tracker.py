@@ -241,7 +241,7 @@ if menu == "수입 현황 대시보드":
         yy_df['증감률'] = yy_df['증감량(KG)'] / yy_df['전년도_중량(KG)'].replace(0, np.nan)
         with st.expander("📊 좌우 비교 시각화"):
             create_butterfly_chart_altair(yy_df, '기준연도_중량(KG)', '전년도_중량(KG)', f'{yy_year}년', f'{yy_year-1}년')
-        yy_formatter = {'기준연도_중량(KG)': '{:,.0f}', '전년도_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
+        yy_formatter = {'제품명':'대표품목별','기준연도_중량(KG)': '{:,.0f}', '전년도_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
         st.markdown('<p style="color:red; font-weight:bold;">🔼 수입량 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
         st.dataframe(yy_df.nlargest(5, '증감량(KG)').style.format(yy_formatter, na_rep="-"),hide_index=True)
         st.markdown('<p style="color:blue; font-weight:bold;">🔽 수입량 감소 TOP 5 (감소량 많은 순)</p>', unsafe_allow_html=True)
