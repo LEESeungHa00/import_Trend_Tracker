@@ -208,7 +208,7 @@ if menu == "수입 현황 대시보드":
         sort_order = chart_data.sort_values('증감량(KG)', ascending=False)['대표품목별'].tolist()
 
         chart = alt.Chart(df_melted).mark_bar().encode(
-            x=alt.X('차트_값:Q', title='수입량 (KG)', axis=alt.Axis(labelExpr="abs(datum.value)")),
+            x=alt.X('차트_값:Q', title='수입량 (KG)', axis=alt.Axis(labelExpr="format(abs(datum.value), '~s')")),
             y=alt.Y('대표품목별:N', sort=sort_order, title=None),
             color=alt.Color('시점:N',
                 scale=alt.Scale(domain=[prev_label, base_label], range=['#5f8ad6', '#d65f5f']),
