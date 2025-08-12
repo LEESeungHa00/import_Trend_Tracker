@@ -486,6 +486,7 @@ elif menu == "기간별 수입량 분석":
     
     all_items = sorted(analysis_df['대표품목별'].unique())
     with col2:
+
         # 1. session_state에 선택 목록이 없으면 빈 리스트로 초기화
         if 'selected_items_memory' not in st.session_state:
             st.session_state.selected_items_memory = []
@@ -495,12 +496,13 @@ elif menu == "기간별 수입량 분석":
             item for item in st.session_state.selected_items_memory if item in all_items
         ]
 
-        # 3. multiselect 위젯을 생성하고, 반환된 값을 selected_items에 저장
-        selected_items = st.multiselect(
+        # 3. multiselect 위젯이 session_state에 직접 값을 쓰고 읽도록 key를 할당
+        st.multiselect(
             "품목 선택 (최대 5개)",
             options=all_items,
             placeholder="수입량 추이를 확인할 품목을 선택해주세요",
-            default=st.session_state.selected_items_memory,
+            # key를 지정하여 session_state와 직접 연결합니다.
+            key='selected_items_memory',
             max_selections=5
         )
         
