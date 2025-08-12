@@ -212,10 +212,8 @@ if menu == "수입 현황 대시보드":
         # JS 표현식으로 축 라벨 포맷 지정
         label_expr = """
         datum.value == 0 ? '0' : 
-        (abs(datum.value) >= 10000000 ? (abs(datum.value) / 10000000) + '천만' : 
-        (abs(datum.value) >= 1000000 ? (abs(datum.value) / 1000000) + '백만' : 
-        (abs(datum.value) >= 10000 ? (abs(datum.value) / 10000) + '만' : 
-        (abs(datum.value) >= 1000 ? (abs(datum.value) / 1000) + '천' : abs(datum.value)))))
+        (abs(datum.value) >= 1000000 ? (datum.value / 1000000) + 'M' : 
+        (abs(datum.value) >= 1000 ? (datum.value / 1000) + 'k' : abs(datum.value)))
         """
     # 7. 최종 차트 생성        
         final_chart = alt.Chart(df_melted).mark_bar().encode(
