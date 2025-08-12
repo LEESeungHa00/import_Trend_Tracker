@@ -486,8 +486,14 @@ elif menu == "기간별 수입량 분석":
     
     all_items = sorted(analysis_df['대표품목별'].unique())
     with col2:
+        # 1. session_state에 선택 목록이 없으면 빈 리스트로 초기화
         if 'selected_items_memory' not in st.session_state:
             st.session_state.selected_items_memory = []
+
+        # 2. 현재 선택 가능한 품목(all_items)을 기준으로, 기억된 선택 목록을 필터링 (안정성 강화)
+        st.session_state.selected_items_memory = [
+            item for item in st.session_state.selected_items_memory if item in all_items
+        ]
         selected_items = st.multiselect(
             "품목 선택 (최대 5개)",
             options=all_items,
