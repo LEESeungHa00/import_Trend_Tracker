@@ -217,28 +217,23 @@ if menu == "수입 현황 대시보드":
         (abs(datum.value) >= 10000 ? (datum.value / 10000) + '만' : 
         (abs(datum.value) >= 1000 ? (datum.value / 1000) + '천' : datum.value))))
         """
-    # 7. 최종 차트 생성
-        chart = alt.Chart(df_melted).mark_bar().encode(
-        # X축: 수입량. labelExpr를 사용해 단위를 변환하고 음수 기호를 제거
-        x=alt.X('차트_값:Q', title='수입량 (KG)', axis=alt.Axis(labelExpr=label_expr)),
-        # Y축: 대표품목별. 품목명이 왼쪽에 표시됨
-        y=alt.Y('대표품목별:N', sort=sort_order, title=None),
-        # 색상: 시점에 따라 파란색/붉은색으로 구분
-        color=alt.Color('시점:N',
-            scale=alt.Scale(domain=[prev_label, base_label], range=['#5f8ad6', '#d65f5f']),
-            legend=alt.Legend(title="시점 구분", orient='top')
-        ),
-        # 툴팁: 마우스를 올리면 상세 정보 표시
-        tooltip=[
-            alt.Tooltip('대표품목별', title='품목'),
-            alt.Tooltip('시점', title='기간'),
-            alt.Tooltip('수입량(KG)', title='수입량', format=',.0f')
-        ]
-    ).properties(
-        title=alt.TitleParams(text=f'{base_label} vs {prev_label} 수입량 비교', anchor='middle')
-    )
-    
-    st.altair_chart(chart, use_container_width=True)
+    # 7. 최종 차트 생성        final_chart = alt.Chart(df_melted).mark_bar().encode(
+            x=alt.X('차트_값:Q', title='수입량 (KG)', axis=alt.Axis(labelExpr=label_expr)),
+            y=alt.Y('대표품목별:N', sort=sort_order, title=None),
+            color=alt.Color('시점:N',
+                scale=alt.Scale(domain=[prev_label, base_label], range=['#5f8ad6', '#d65f5f']),
+                legend=alt.Legend(title="시점 구분", orient='top')
+            ),
+            tooltip=[
+                alt.Tooltip('대표품목별', title='품목'),
+                alt.Tooltip('시점', title='기간'),
+                alt.Tooltip('수입량(KG)', title='수입량', format=',.0f')
+            ]
+        ).properties(
+            title=alt.TitleParams(text=f'{base_label} vs {prev_label} 수입량 비교', anchor='middle')
+        )
+        
+        st.altair_chart(final_chart, use_container_width=True)
 
     tab_yy, tab_mom, tab_yoy, tab_qoq, tab_hoh = st.tabs([
         "전년 대비", "전월 대비", "전년 동월 대비", "전년 동분기 대비", "전년 동반기 대비"
