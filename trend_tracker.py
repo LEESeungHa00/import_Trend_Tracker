@@ -374,7 +374,7 @@ elif menu == "시계열 추세 분석":
         
         trend_type_years = st.radio("추세 선택", ("지속 증가 📈", "지속 감소 📉"), horizontal=True, key="trend_type_years")
 
-        period_df_yearly = yearly.agg[(yearly_agg['연도'] >= start_) & (yearly_agg['연도'] <= end_y)]
+        period_df_yearly = yearly_agg[(yearly_agg['연도'] >= start_) & (yearly_agg['연도'] <= end_y)]
         results_yearly =[]
         for item, group in period_df_yearly.groupby('대표품목별'):
             if len(group['연도'].unique()) == duration_years :
