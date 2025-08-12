@@ -359,122 +359,118 @@ elif menu == "시계열 추세 분석":
 
     yearly_agg = trend_df.groupby(['연도', '대표품목별'])[PRIMARY_WEIGHT_COL].sum().reset_index()
     available_years = sorted(yearly_agg['연도'].unique())
+    available_years_trend = sorted(yearly_agg['연도'].unique().astype(int))
     max_duration_years = len(available_years)
 
-    col1_y, col2_y = st.columns(2)
-    with col1_y:
-        duration_years = st.slider("분석 기간 (년)", min_value=2, max_value=max_duration_years, value=min(3, max_duration_years), key="duration_years")
-    with col2_y:
+    if len(available_years_trend) >=2:
+        start_y, end_y = st.select_slider(
+            '분석 기간 (년)',
+            options=available_years_trend,
+            value=(available_years_trend[0], available_years_trend[-1]),
+            key='yearly_slider'
+        )
+        duration_years = end_y - start_y + 1
+        st.caption(f"선택된 기간 : **{duration_years}년** ({start_y}년 ~ {end_y}년)")
+        
         trend_type_years = st.radio("추세 선택", ("지속 증가 📈", "지속 감소 📉"), horizontal=True, key="trend_type_years")
 
-    end_year = available_years[-1]
-    start_year = end_year - duration_years + 1
-    
-    period_df_yearly = yearly_agg[(yearly_agg['연도'] >= start_year) & (yearly_agg['연도'] <= end_year)]
-    
-    results_yearly = []
-    for item, group in period_df_yearly.groupby('대표품목별'):
-        if len(group['연도'].unique()) == duration_years:
-            group = group.sort_values('연도')
-            x = group['연도'].values
-            y = group[PRIMARY_WEIGHT_COL].values
-            slope, _ = np.polyfit(x, y, 1)
-            
-            start_val = group.iloc[0][PRIMARY_WEIGHT_COL]
-            end_val = group.iloc[-1][PRIMARY_WEIGHT_COL]
-            growth_rate = (end_val - start_val) / start_val if start_val > 0 else (np.inf if end_val > 0 else 0)
+        period_df_yearly = yearly.agg[(yearly_agg['연도'] >= start_) & (yearly_agg['연도'] <= end_y)]
+        results_yearly =[]
+        for item, group in period_df_yearly.groupby('대표품목별'):
+            if len(group['연도'].unique()) == duration_years :
+                group = group.sort_values('연도')
+                diffs = group[PRIMARY_WEIGHT_COL].diff().dropna()
+                if (trend_type_years == "지속 증가 📈" and (diffs>0).all()) or |
+                   (trend_tupe_years == "지속 감소 📉" and (diffs <0).all()):
+                        start_val = group.iloc[0][PRIMARY_WEIGHT_COL]
+                    end_val = group.iloc[-1][PRIMARY_WEIGHT_COL]
+                    growth_rate = (end_val - start_val) / start_val if start_val > 0 else (np.inf if end_val > 0 else 0)
+                    results_yearly.append({
+                        '대표품목별': item,
+                        f'{start_y}년_수입량(KG)': start_val, f'{end_y}년_수입량(KG)': end_val,
+                        '기간내_증감률': growth_rate
+                    })
+        if results_yearly:
+            result_df_yearly = pd.DataFrame(results_yearly).nlargest(10, '기간내_증감률') if trend_type_years == "지속 증가 📈" else pd.DataFrame(results_yearly).nsmallest(10, '기간내_증감률')
+            st.markdown(f"**선택 기간 동안 `{trend_type_years}` 품목 TOP 10**")
+            st.dataframe(result_df_yearly.style.format({
+                f'{start_y}년_수입량(KG)': '{:,.0f}', f'{end_y}년_수입량(KG)': '{:,.0f}',
+                '기간내_증감률': '{:+.2%}'
+            }, na_rep="-"))
+            if not result_df_yearly.empty:
+                st.markdown("---")
+                st.subheader("개별 품목 연도별 추이 그래프")
+                selected_item_y = st.selectbox("그래프로 확인할 품목을 선택하세요", options=result_df_yearly['대표품목별'], key="selected_item_y")
+                if selected_item_y:
+                    item_trend_df_y = period_df_yearly[period_df_yearly['대표품목별'] == selected_item_y]
+                    chart_y = alt.Chart(item_trend_df_y).mark_line(point=True).encode(
+                        x=alt.X('연도:O', title='연도'),
+                        y=alt.Y(f'{PRIMARY_WEIGHT_COL}:Q', title='수입량 (KG)'),
+                        tooltip=['연도', alt.Tooltip(f'{PRIMARY_WEIGHT_COL}', title='수입량', format=',.0f')]
+                    ).properties(title=f"'{selected_item_y}'의 {start_y}년 ~ {end_y}년 수입량 추이").interactive()
+                    st.altair_chart(chart_y, use_container_width=True)
+    else:
+        st.warning("연도별 추세를 분석하려면 최소 2년 이상의 데이터가 필요합니다.")
 
-            results_yearly.append({
-                '대표품목별': item, '추세(기울기)': slope,
-                f'{int(start_year)}년_수입량(KG)': start_val, f'{int(end_year)}년_수입량(KG)': end_val,
-                '기간내_증감률': growth_rate
-            })
-
-    if results_yearly:
-        result_df_yearly = pd.DataFrame(results_yearly)
-        if trend_type_years == "지속 증가 📈":
-            final_df_yearly = result_df_yearly[result_df_yearly['추세(기울기)'] > 0].nlargest(10, '기간내_증감률')
-        else:
-            final_df_yearly = result_df_yearly[result_df_yearly['추세(기울기)'] < 0].nsmallest(10, '기간내_증감률')
-
-        st.markdown(f"**최근 {duration_years}년간 `{trend_type_years}` 품목 TOP 10**")
-        st.dataframe(final_df_yearly.style.format({
-            '추세(기울기)': '{:,.2f}', f'{int(start_year)}년_수입량(KG)': '{:,.0f}',
-            f'{int(end_year)}년_수입량(KG)': '{:,.0f}', '기간내_증감률': '{:+.2%}'
-        }, na_rep="-"))
-
-        if not final_df_yearly.empty:
-            st.markdown("---")
-            st.subheader("개별 품목 연도별 추이 그래프")
-            selected_item_y = st.selectbox("그래프로 확인할 품목을 선택하세요", options=final_df_yearly['대표품목별'], key="selected_item_y")
-            if selected_item_y:
-                item_trend_df_y = period_df_yearly[period_df_yearly['대표품목별'] == selected_item_y]
-                chart_y = alt.Chart(item_trend_df_y).mark_line(point=True).encode(
-                    x=alt.X('연도:O', title='연도'),
-                    y=alt.Y(f'{PRIMARY_WEIGHT_COL}:Q', title='수입량 (KG)'),
-                    tooltip=['연도', alt.Tooltip(f'{PRIMARY_WEIGHT_COL}', title='수입량', format=',.0f')]
-                ).properties(title=f"'{selected_item_y}'의 최근 {duration_years}년간 수입량 추이").interactive()
-                st.altair_chart(chart_y, use_container_width=True)
-
-    # --- 2. 월별 - 단기 추세 분석 ---
     st.markdown("---")
     st.subheader("월별 - 단기 추세 분석")
-    
-    total_months = len(trend_df[['연도', '월']].drop_duplicates())
-    col1_m, col2_m = st.columns(2)
-    with col1_m:
-        duration_months = st.slider("분석 기간 (개월)", min_value=3, max_value=total_months, value=min(12, total_months), key="duration_months")
-    with col2_m:
-        trend_type_months = st.radio("추세 선택", ("지속 증가 📈", "지속 감소 📉"), horizontal=True, key="trend_type_months")
-
-    end_date = trend_df['날짜'].max()
-    start_date = end_date - pd.DateOffset(months=duration_months - 1)
-    period_df_monthly = trend_df[(trend_df['날짜'] >= start_date) & (trend_df['날짜'] <= end_date)]
-    
-    results_monthly = []
-    for item, group in period_df_monthly.groupby('대표품목별'):
-        if len(group['날짜'].dt.to_period('M').unique()) == duration_months:
-            monthly_agg = group.groupby(pd.Grouper(key='날짜', freq='M'))[PRIMARY_WEIGHT_COL].sum()
-            x = np.arange(len(monthly_agg))
-            y = monthly_agg.values
-            slope, _ = np.polyfit(x, y, 1)
-            start_val = monthly_agg.iloc[0]
-            end_val = monthly_agg.iloc[-1]
-            growth_rate = (end_val - start_val) / start_val if start_val > 0 else (np.inf if end_val > 0 else 0)
-            results_monthly.append({
-                '대표품목별': item, '추세(기울기)': slope,
-                '시작월_수입량(KG)': start_val, '종료월_수입량(KG)': end_val,
-                '기간내_증감률': growth_rate
-            })
-
-    if results_monthly:
-        result_df_monthly = pd.DataFrame(results_monthly)
-        if trend_type_months == "지속 증가 📈":
-            final_df_monthly = result_df_monthly[result_df_monthly['추세(기울기)'] > 0].nlargest(10, '기간내_증감률')
-        else:
-            final_df_monthly = result_df_monthly[result_df_monthly['추세(기울기)'] < 0].nsmallest(10, '기간내_증감률')
+    monthly_periods = sorted(trend_df['날짜'].dt.to_period('M').unique().astype(str))
+    if len(monthly_periods) >= 3:
+        start_m, end_m = st.select_slider(
+            '분석 기간 (월)',
+            options=monthly_periods,
+            value=(monthly_periods[0], monthly_periods[-1]),
+            key='monthly_slider'
+        )
+        start_date = pd.to_datetime(start_m).to_pydatetime()
+        end_date = pd.to_datetime(end_m).to_pydatetime()
+        duration_months = (end_date.year - start_date.year) * 12 + end_date.month - start_date.month + 1
+        st.caption(f"선택된 기간: **{duration_months}개월** ({start_m} ~ {end_m})")
         
-        st.markdown(f"**최근 {duration_months}개월간 `{trend_type_months}` 품목 TOP 10**")
-        st.dataframe(final_df_monthly.style.format({
-            '추세(기울기)': '{:,.2f}', '시작월_수입량(KG)': '{:,.0f}',
-            '종료월_수입량(KG)': '{:,.0f}', '기간내_증감률': '{:+.2%}'
-        }, na_rep="-"))
+        trend_type_months = st.radio("추세 선택", ("지속 증가 📈", "지속 감소 📉"), horizontal=True, key="trend_type_months")
+        
+        period_df_monthly = trend_df[(trend_df['날짜'] >= start_date) & (trend_df['날짜'] <= end_date)]
+        results_monthly = []
+        for item, group in period_df_monthly.groupby('대표품목별'):
+            if len(group['날짜'].dt.to_period('M').unique()) == duration_months:
+                monthly_agg = group.groupby(pd.Grouper(key='날짜', freq='M'))[PRIMARY_WEIGHT_COL].sum()
+                diffs = monthly_agg.diff().dropna()
+                if (trend_type_months == "지속 증가 📈" and (diffs > 0).all()) or \
+                   (trend_type_months == "지속 감소 📉" and (diffs < 0).all()):
+                    start_val = monthly_agg.iloc[0]
+                    end_val = monthly_agg.iloc[-1]
+                    growth_rate = (end_val - start_val) / start_val if start_val > 0 else (np.inf if end_val > 0 else 0)
+                    results_monthly.append({
+                        '대표품목별': item,
+                        '시작월_수입량(KG)': start_val, '종료월_수입량(KG)': end_val,
+                        '기간내_증감률': growth_rate
+                    })
+        if results_monthly:
+            result_df_monthly = pd.DataFrame(results_monthly).nlargest(10, '기간내_증감률') if trend_type_months == "지속 증가 📈" else pd.DataFrame(results_monthly).nsmallest(10, '기간내_증감률')
+            st.markdown(f"**선택 기간 동안 `{trend_type_months}` 품목 TOP 10**")
+            st.dataframe(result_df_monthly.style.format({
+                '시작월_수입량(KG)': '{:,.0f}', '종료월_수입량(KG)': '{:,.0f}',
+                '기간내_증감률': '{:+.2%}'
+            }, na_rep="-"))
+            if not result_df_monthly.empty:
+                st.markdown("---")
+                st.subheader("개별 품목 월별 추이 그래프")
+                selected_item_m = st.selectbox("그래프로 확인할 품목을 선택하세요", options=result_df_monthly['대표품목별'], key="selected_item_m")
+                if selected_item_m:
+                    item_trend_df_m = period_df_monthly[period_df_monthly['대표품목별'] == selected_item_m]
+                    monthly_item_agg = item_trend_df_m.groupby(pd.Grouper(key='날짜', freq='M'))[PRIMARY_WEIGHT_COL].sum().reset_index()
+                    monthly_item_agg['기간'] = monthly_item_agg['날짜'].dt.strftime('%Y-%m')
+                    chart_m = alt.Chart(monthly_item_agg).mark_line(point=True).encode(
+                        x=alt.X('기간:N', sort=None, title='월'),
+                        y=alt.Y(f'{PRIMARY_WEIGHT_COL}:Q', title='수입량 (KG)'),
+                        tooltip=['기간', alt.Tooltip(f'{PRIMARY_WEIGHT_COL}', title='수입량', format=',.0f')]
+                    ).properties(title=f"'{selected_item_m}'의 {start_m} ~ {end_m} 수입량 추이").interactive()
+                    st.altair_chart(chart_m, use_container_width=True)
+    else:
+        st.warning("월별 추세를 분석하려면 최소 3개월 이상의 데이터가 필요합니다.")
+                       
 
-        if not final_df_monthly.empty:
-            st.markdown("---")
-            st.subheader("개별 품목 월별 추이 그래프")
-            selected_item_m = st.selectbox("그래프로 확인할 품목을 선택하세요", options=final_df_monthly['대표품목별'], key="selected_item_m")
-            if selected_item_m:
-                item_trend_df_m = period_df_monthly[period_df_monthly['대표품목별'] == selected_item_m]
-                monthly_item_agg = item_trend_df_m.groupby(pd.Grouper(key='날짜', freq='M'))[PRIMARY_WEIGHT_COL].sum().reset_index()
-                monthly_item_agg['기간'] = monthly_item_agg['날짜'].dt.strftime('%Y-%m')
-                chart_m = alt.Chart(monthly_item_agg).mark_line(point=True).encode(
-                    x=alt.X('기간:N', sort=None, title='월'),
-                    y=alt.Y(f'{PRIMARY_WEIGHT_COL}:Q', title='수입량 (KG)'),
-                    tooltip=['기간', alt.Tooltip(f'{PRIMARY_WEIGHT_COL}', title='수입량', format=',.0f')]
-                ).properties(title=f"'{selected_item_m}'의 최근 {duration_months}개월 수입량 추이").interactive()
-                st.altair_chart(chart_m, use_container_width=True)
-
+   
 elif menu == "기간별 수입량 분석":
     st.title(f"📆 기간별 수입량 추이 분석 (기준: {PRIMARY_WEIGHT_COL})")
     st.markdown("---")
