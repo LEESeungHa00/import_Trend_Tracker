@@ -315,9 +315,9 @@ if menu == "수입 현황 대시보드":
             create_butterfly_chart_altair(qoq_df, '기준분기_중량(KG)', '전년동분기_중량(KG)', f'{q_year}년 {q_quarter}분기', f'{q_year-1}년 {q_quarter}분기')
         q_formatter = {'기준분기_중량(KG)': '{:,.0f}', '전년동분기_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
         st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(qoq_df.nlargest(5, '증감량(KG)').style.format(q_formatter, na_rep="-"))
+        st.dataframe(qoq_df.nlargest(5, '증감량(KG)').style.format(q_formatter, na_rep="-"),hide_index=True)
         st.markdown('<p style="color:blue; font-weight:bold;">🔽 감소 TOP 5 (감소량 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(qoq_df.nsmallest(5, '증감량(KG)').style.format(q_formatter, na_rep="-"))
+        st.dataframe(qoq_df.nsmallest(5, '증감량(KG)').style.format(q_formatter, na_rep="-"),hide_index=True)
 
     with tab_hoh:
         st.subheader("🆚 전년 동반기 대비 수입량 분석")
@@ -340,9 +340,9 @@ if menu == "수입 현황 대시보드":
             create_butterfly_chart_altair(hoh_df, '기준반기_중량(KG)', '전년동반기_중량(KG)', f'{h_year}년 {half_display(h_half)}', f'{h_year-1}년 {half_display(h_half)}')
         h_formatter = {'기준반기_중량(KG)': '{:,.0f}', '전년동반기_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
         st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(hoh_df.nlargest(5, '증감량(KG)').style.format(h_formatter, na_rep="-"))
+        st.dataframe(hoh_df.nlargest(5, '증감량(KG)').style.format(h_formatter, na_rep="-"),hide_index=True)
         st.markdown('<p style="color:blue; font-weight:bold;">🔽 감소 TOP 5 (감소량 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(hoh_df.nsmallest(5, '증감량(KG)').style.format(h_formatter, na_rep="-"))
+        st.dataframe(hoh_df.nsmallest(5, '증감량(KG)').style.format(h_formatter, na_rep="-"),hide_index=True)
 
 elif menu == "시계열 추세 분석":
     st.title("📈 시계열 추세 분석")
@@ -397,7 +397,7 @@ elif menu == "시계열 추세 분석":
             st.dataframe(result_df_yearly.style.format({
                 f'{start_y}년_수입량(KG)': '{:,.0f}', f'{end_y}년_수입량(KG)': '{:,.0f}',
                 '기간내_증감률': '{:+.2%}'
-            }, na_rep="-"))
+            }, na_rep="-"),hide_index=True)
             if not result_df_yearly.empty:
                 st.markdown("---")
                 st.subheader("개별 품목 연도별 추이 그래프")
@@ -452,7 +452,7 @@ elif menu == "시계열 추세 분석":
             st.dataframe(result_df_monthly.style.format({
                 '시작월_수입량(KG)': '{:,.0f}', '종료월_수입량(KG)': '{:,.0f}',
                 '기간내_증감률': '{:+.2%}'
-            }, na_rep="-"))
+            }, na_rep="-"),hide_index=True)
             if not result_df_monthly.empty:
                 st.markdown("---")
                 st.subheader("개별 품목 월별 추이 그래프")
@@ -539,7 +539,7 @@ elif menu == "기간별 수입량 분석":
             
         with st.expander("데이터 상세 보기"):
             st.subheader("기간별 수입량 (KG)")
-            st.dataframe(agg_df.style.format("{:,.0f}"))
+            st.dataframe(agg_df.style.format("{:,.0f}"),hide_index=True)
             st.subheader("이전 기간 대비 증감률 (%)")
             growth_rate_df = agg_df.pct_change()
             st.dataframe(growth_rate_df.style.format("{:+.2%}", na_rep="-"))
