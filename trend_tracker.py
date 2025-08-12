@@ -248,7 +248,7 @@ if menu == "수입 현황 대시보드":
         yy_df = yy_df.join(prev_yy_agg.rename('전년도_중량(KG)'), how='outer').fillna(0)
         yy_df['증감량(KG)'] = yy_df['기준연도_중량(KG)'] - yy_df['전년도_중량(KG)']
         yy_df['증감률'] = yy_df['증감량(KG)'] / yy_df['전년도_중량(KG)'].replace(0, np.nan)
-        with st.expander("📊 좌우 비교 시각화"):
+        with st.expander("📊 Before & After"):
             create_butterfly_chart_altair(yy_df, '기준연도_중량(KG)', '전년도_중량(KG)', f'{yy_year}년', f'{yy_year-1}년')
         yy_formatter = {'제품명':'대표품목별','기준연도_중량(KG)': '{:,.0f}', '전년도_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
         st.markdown('<p style="color:red; font-weight:bold;">🔼 수입량 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
@@ -273,7 +273,7 @@ if menu == "수입 현황 대시보드":
         mom_df = mom_df.join(prev_agg.rename('전월_중량(KG)'), how='outer').fillna(0)
         mom_df['증감량(KG)'] = mom_df['기준월_중량(KG)'] - mom_df['전월_중량(KG)']
         mom_df['증감률'] = mom_df['증감량(KG)'] / mom_df['전월_중량(KG)'].replace(0, np.nan)
-        with st.expander("📊 좌우 비교 시각화"):
+        with st.expander("📊 Before & After"):
             create_butterfly_chart_altair(mom_df, '기준월_중량(KG)', '전월_중량(KG)', f'{mom_year}년 {mom_month}월', f'{prev_month_date.year}년 {prev_month_date.month}월')
         mom_formatter = {'기준월_중량(KG)': '{:,.0f}', '전월_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
         st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
@@ -296,7 +296,7 @@ if menu == "수입 현황 대시보드":
         yoy_df = yoy_df.join(prev_year_agg.rename('전년동월_중량(KG)'), how='outer').fillna(0)
         yoy_df['증감량(KG)'] = yoy_df['기준월_중량(KG)'] - yoy_df['전년동월_중량(KG)']
         yoy_df['증감률'] = yoy_df['증감량(KG)'] / yoy_df['전년동월_중량(KG)'].replace(0, np.nan)
-        with st.expander("📊 좌우 비교 시각화"):
+        with st.expander("📊 Before & After"):
             create_butterfly_chart_altair(yoy_df, '기준월_중량(KG)', '전년동월_중량(KG)', f'{yoy_year}년 {yoy_month}월', f'{yoy_year-1}년 {yoy_month}월')
         yoy_formatter = {'기준월_중량(KG)': '{:,.0f}', '전년동월_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
         st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
@@ -320,7 +320,7 @@ if menu == "수입 현황 대시보드":
         qoq_df = qoq_df.join(prev_q_agg.rename('전년동분기_중량(KG)'), how='outer').fillna(0)
         qoq_df['증감량(KG)'] = qoq_df['기준분기_중량(KG)'] - qoq_df['전년동분기_중량(KG)']
         qoq_df['증감률'] = qoq_df['증감량(KG)'] / qoq_df['전년동분기_중량(KG)'].replace(0, np.nan)
-        with st.expander("📊 좌우 비교 시각화"):
+        with st.expander("📊 Before & After"):
             create_butterfly_chart_altair(qoq_df, '기준분기_중량(KG)', '전년동분기_중량(KG)', f'{q_year}년 {q_quarter}분기', f'{q_year-1}년 {q_quarter}분기')
         q_formatter = {'기준분기_중량(KG)': '{:,.0f}', '전년동분기_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
         st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
@@ -345,7 +345,7 @@ if menu == "수입 현황 대시보드":
         hoh_df = hoh_df.join(prev_h_agg.rename('전년동반기_중량(KG)'), how='outer').fillna(0)
         hoh_df['증감량(KG)'] = hoh_df['기준반기_중량(KG)'] - hoh_df['전년동반기_중량(KG)']
         hoh_df['증감률'] = hoh_df['증감량(KG)'] / hoh_df['전년동반기_중량(KG)'].replace(0, np.nan)
-        with st.expander("📊 좌우 비교 시각화"):
+        with st.expander("📊 Before & After"):
             create_butterfly_chart_altair(hoh_df, '기준반기_중량(KG)', '전년동반기_중량(KG)', f'{h_year}년 {half_display(h_half)}', f'{h_year-1}년 {half_display(h_half)}')
         h_formatter = {'기준반기_중량(KG)': '{:,.0f}', '전년동반기_중량(KG)': '{:,.0f}', '증감량(KG)': '{:+,.0f}', '증감률': '{:+.2%}'}
         st.markdown('<p style="color:red; font-weight:bold;">🔼 증가 TOP 5 (증가량 많은 순)</p>', unsafe_allow_html=True)
