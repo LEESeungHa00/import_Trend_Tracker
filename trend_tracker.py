@@ -34,22 +34,21 @@ WORKSHEET_NAME = "월별통합"
 
 # ---------------------------------
 # 구글 시트 연동 설정
-# ---------------------------------
+# --------------------------------
 def get_google_sheet_client():
     """Streamlit의 Secrets를 사용하여 구글 시트 API에 연결하고 클라이언트 객체를 반환합니다."""
     try:
         creds_dict = st.secrets["gcp_service_account"]
         scopes = [
-                    "https://www.googleapis.com/auth/spreadsheets", 
-                    "https://www.googleapis.com/auth/drive"
-                ]
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         client = gspread.authorize(creds)
         return client
     except Exception as e:
         st.error(f"🚨 구글 시트 인증 중 오류가 발생했습니다: {e}")
         return None
-
 # ---------------------------------
 # 데이터 로딩 및 전처리
 # ---------------------------------
