@@ -222,6 +222,22 @@ if df.empty and menu != "데이터 추가":
     st.warning("데이터가 없습니다. '데이터 추가' 탭으로 이동하여 데이터를 업로드해주세요.")
     st.stop()
 
+# ----- [수정] 줌/팬 동작 재정의 -----
+# 1. 확대 (그냥 드래그)
+zoom_on_drag = alt.selection_interval(
+    bind='scales',
+    on="[mousedown[!event.shiftKey], mouseup] > mousemove", # Shift 키가 눌리지 않은 상태의 드래그
+    empty='all'
+)
+# 2. 이동 (Shift + 드래그)
+pan_on_shift_drag = alt.selection_interval(
+    bind='scales',
+    on="[mousedown[event.shiftKey], mouseup] > mousemove", # Shift 키가 눌린 상태의 드래그
+    empty='all'
+)
+# -----------------------------------
+
+
 # --- 대시보드 페이지 ---
 if menu == "수입 현황 대시보드":
     st.title(f"📊 수입 현황 대시보드")
@@ -273,7 +289,10 @@ if menu == "수입 현황 대시보드":
             ]
         ).properties(
             title=alt.TitleParams(text=f'{prev_label} vs {base_label} {value_name} 비교', anchor='middle')
-        ).interactive()
+        ).add_params( # [수정] .interactive() 대신 add_params 사용
+            zoom_on_drag,
+            pan_on_shift_drag
+        )
         
         st.altair_chart(final_chart, use_container_width=True)
 
@@ -455,7 +474,11 @@ elif menu == "시계열 추세 분석":
                         x=alt.X('연도:O', title='연도'),
                         y=alt.Y(f'{primary_col}:Q', title=f'{value_name} {unit}', axis=alt.Axis(format=axis_format)),
                         tooltip=['연도', alt.Tooltip(f'{primary_col}', title=value_name, format=',.0f')]
-                    ).properties(title=f"'{selected_item_y}'의 {start_y}년 ~ {end_y}년 {value_name} 추이").interactive()
+                    ).properties(title=f"'{selected_item_y}'의 {start_y}년 ~ {end_y}년 {value_name} 추이"
+                    ).add_params( # [수정] .interactive() 대신 add_params 사용
+                        zoom_on_drag,
+                        pan_on_shift_drag
+                    )
                     st.altair_chart(chart_y, use_container_width=True)
     else:
         st.warning("연도별 추세를 분석하려면 최소 2년 이상의 데이터가 필요합니다.")
@@ -518,12 +541,16 @@ elif menu == "시계열 추세 분석":
                         x=alt.X('기간:N', sort=None, title='월'),
                         y=alt.Y(f'{primary_col}:Q', title=f'{value_name} {unit}', axis=alt.Axis(format=axis_format)),
                         tooltip=['기간', alt.Tooltip(f'{primary_col}', title=value_name, format=',.0f')]
-                    ).properties(title=f"'{selected_item_m}'의 {start_m} ~ {end_m} {value_name} 추이").interactive()
+                    ).properties(title=f"'{selected_item_m}'의 {start_m} ~ {end_m} {value_name} 추이"
+                    ).add_params( # [수정] .interactive() 대신 add_params 사용
+                        zoom_on_drag,
+                        pan_on_shift_drag
+                    )
                     st.altair_chart(chart_m, use_container_width=True)
     else:
         st.warning("월별 추세를 분석하려면 최소 3개월 이상의 데이터가 필요합니다.")
 
-# --- [수정] 기간별 추이 분석 페이지 (로직 전면 수정) ---
+# --- 기간별 추이 분석 페이지 ---
 elif menu == "기간별 추이 분석":
     st.title(f"📆 기간별 {value_name} 추이 분석 (기준: {primary_col})")
     st.markdown("---")
@@ -540,6 +567,7 @@ elif menu == "기간별 추이 분석":
     all_items = sorted(analysis_df['대표품목별'].unique())
 
     with col2:
+        # [수정] UI 텍스트 명확화
         st.markdown("##### 1. 제품구분별 선택 (최대 5개)")
         st.info("기본적으로 '카테고리' 그래프가 그려집니다. 2번에서 품목 선택 시 '필터'로 동작합니다.")
         selected_categories = st.multiselect(
@@ -547,11 +575,10 @@ elif menu == "기간별 추이 분석":
             options=all_categories,
             placeholder="카테고리를 선택하세요 (최대 5개)",
             label_visibility="collapsed",
-            max_selections=5,  # 카테고리 자체도 5개 제한
+            max_selections=5,
             key='cat_select'
         )
         
-        # 카테고리 선택에 따라 품목 리스트 필터링
         if selected_categories:
             filtered_items_df = analysis_df[analysis_df['제품구분별'].isin(selected_categories)]
             available_items = sorted(filtered_items_df['대표품목별'].unique())
@@ -560,6 +587,7 @@ elif menu == "기간별 추이 분석":
             available_items = all_items
             item_placeholder = "전체 개별 품목 (최대 5개)"
 
+        # [수정] UI 텍스트 명확화
         st.markdown("##### 2. 대표품목별 선택 (최대 5개)")
         st.info("여기에 품목을 선택하면, 그래프는 '품목' 기준으로 그려집니다.")
         selected_items = st.multiselect(
@@ -567,40 +595,30 @@ elif menu == "기간별 추이 분석":
             options=available_items,
             placeholder=f"{item_placeholder}",
             label_visibility="collapsed",
-            max_selections=5, # 품목 자체도 5개 제한
+            max_selections=5,
             key='item_select'
         )
 
-    # --- [수정] 그래프 로직: selected_items가 있으면 품목, 없으면 카테고리 기준 ---
-    
-    # 1. 집계할 컬럼과 데이터프레임 결정
     agg_df = pd.DataFrame()
     
     if selected_items:
-        # 2.1. 품목 모드: selected_items가 기준
         graph_title = "대표품목별 추이"
         agg_by_col = '대표품목별'
         filtered_df = analysis_df[analysis_df['대표품목별'].isin(selected_items)]
-        # 카테고리 필터가 있다면 추가로 필터링
         if selected_categories:
              filtered_df = filtered_df[filtered_df['제품구분별'].isin(selected_categories)]
     
     elif selected_categories:
-        # 2.2. 카테고리 모드: selected_items가 비어있고 selected_categories가 기준
         graph_title = "제품구분별 추이"
         agg_by_col = '제품구분별'
         filtered_df = analysis_df[analysis_df['제품구분별'].isin(selected_categories)]
     
     else:
-        # 2.3. 아무것도 선택 안 됨
         st.info("그래프를 보려면 '제품구분별' 또는 '대표품목별'을 선택해주세요.")
-        # st.stop()은 streamlit 클라우드 환경에서 오류를 일으킬 수 있으므로,
-        # 이후 로직이 비어있는 agg_df를 처리하도록 둡니다.
-        filtered_df = pd.DataFrame() # 빈 DF로 설정
-        agg_by_col = None # None으로 설정
+        filtered_df = pd.DataFrame()
+        agg_by_col = None
 
     if not filtered_df.empty and agg_by_col:
-        # 3. 공통 집계 로직
         agg_cols, title_suffix = [], ""
         if period_type == '월별':
             agg_cols, title_suffix = ['연도', '월'], f"월별 {value_name} 추이"
@@ -609,13 +627,11 @@ elif menu == "기간별 추이 분석":
         elif period_type == '반기별':
             agg_cols, title_suffix = ['연도', '반기'], f"반기별 {value_name} 추이"
         
-        # agg_by_col (대표품목별 or 제품구분별)을 기준으로 집계
         agg_df = filtered_df.groupby(agg_cols + [agg_by_col])[primary_col].sum().unstack(fill_value=0)
         
         if agg_df.empty:
             st.info("선택한 항목에 대한 데이터가 없습니다.")
         else:
-            # 4. 인덱스 포매팅 (공통)
             if period_type == '월별':
                 agg_df.index = agg_df.index.map(lambda x: f"{int(x[0])}-{int(x[1]):02d}")
             elif period_type == '분기별':
@@ -625,21 +641,23 @@ elif menu == "기간별 추이 분석":
             
             st.header(f"📈 {graph_title} - {title_suffix}")
             
-            # 5. Melt (var_name을 agg_by_col의 값으로 동적 할당)
             df_melted = agg_df.reset_index().melt(id_vars='index', var_name=agg_by_col, value_name=f'{value_name}{unit}')
             df_melted.rename(columns={'index': '기간'}, inplace=True)
             
             chart_type = st.radio("차트 종류", ('선 그래프', '막대 그래프'), horizontal=True, key="chart_type_trends")
             
-            # 6. Chart (color, tooltip을 agg_by_col 기준으로 동적 할당)
+            # [수정] .interactive() 대신 add_params를 base_chart에 적용
             base_chart = alt.Chart(df_melted).encode(
                 x=alt.X('기간:N', sort=None, title='기간'),
                 y=alt.Y(f'{value_name}{unit}:Q', title=f'{value_name} {unit}', axis=alt.Axis(format=axis_format)),
                 color=alt.Color(f'{agg_by_col}:N', title='선택 항목'),
                 tooltip=['기간', alt.Tooltip(f'{agg_by_col}', title='선택 항목'), alt.Tooltip(f'{value_name}{unit}', title=value_name, format=',.0f')]
+            ).add_params(
+                zoom_on_drag,
+                pan_on_shift_drag
             )
             
-            chart = base_chart.mark_line(point=True).interactive() if chart_type == '선 그래프' else base_chart.mark_bar().interactive()
+            chart = base_chart.mark_line(point=True) if chart_type == '선 그래프' else base_chart.mark_bar()
             st.altair_chart(chart, use_container_width=True)
                 
             with st.expander("데이터 상세 보기"):
@@ -649,10 +667,8 @@ elif menu == "기간별 추이 분석":
                 growth_rate_df = agg_df.pct_change()
                 st.dataframe(growth_rate_df.style.format("{:+.2%}", na_rep="-"))
     elif not selected_categories and not selected_items:
-        # 2.3. 아무것도 선택 안 됨 (위의 st.info와 연결)
-        pass # 이미 st.info가 표시됨
+        pass
     else:
-        # 데이터가 필터링되었으나 결과가 없는 경우
         st.info("선택한 조건에 해당하는 데이터가 없습니다.")
 
 # --- 데이터 추가 페이지 ---
