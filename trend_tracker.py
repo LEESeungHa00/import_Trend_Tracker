@@ -40,7 +40,7 @@ def get_google_sheet_client():
     try:
         creds_dict = st.secrets["gcp_service_account"]
         scopes = [
-            "https://www.googleapis.com/auth/spreadsheets",
+            "https.www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive"
         ]
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
@@ -124,6 +124,11 @@ def load_data():
 def create_sample_data():
     """분석용 샘플 데이터를 생성합니다."""
     items = ['소고기(냉장)', '바지락(활)', '김치', '과자', '맥주', '새우(냉동)', '오렌지', '바나나', '커피원두', '치즈']
+    categories = {
+        '소고기(냉장)': '축산물', '바지락(활)': '수산물', '김치': '가공식품', 
+        '과자': '가공식품', '맥주': '가공식품', '새우(냉동)': '수산물', 
+        '오렌지': '농산물', '바나나': '농산물', '커피원두': '농산물', '치즈': '축산물'
+    }
     daterange = pd.date_range(start='2021-01-01', end='2025-07-31', freq='M')
     data = []
     no_counter = 1
@@ -132,7 +137,7 @@ def create_sample_data():
             weight = (10000 + items.index(item) * 5000) * np.random.uniform(0.8, 1.2)
             price = weight * np.random.uniform(5, 10)
             data.append([
-                no_counter, date.year, date.month, '가공품', '미국', '미국', '판매용',
+                no_counter, date.year, date.month, categories[item], '미국', '미국', '판매용',
                 item, weight, price, weight*0.95, price*0.95, weight*0.05, price*0.05
             ])
             no_counter += 1
@@ -152,7 +157,7 @@ def update_sheet_in_batches(worksheet, dataframe, batch_size=10000):
         st.success("✅ 업로드 완료! (업로드할 데이터 없음)")
         return
 
-    progress_bar = st.progress(0, text="데이터 업로드를 시작합니다...")
+    progress_bar = st.progress(0, text="데이터 업로드을 시작합니다...")
     
     for i in range(0, total_rows, batch_size):
         batch = data[i:i+batch_size]
@@ -268,7 +273,8 @@ if menu == "수입 현황 대시보드":
             ]
         ).properties(
             title=alt.TitleParams(text=f'{prev_label} vs {base_label} {value_name} 비교', anchor='middle')
-        )
+        ).interactive()
+        
         st.altair_chart(final_chart, use_container_width=True)
 
     def display_comparison_tab(title, current_data, prev_data, base_label, prev_label):
@@ -287,7 +293,7 @@ if menu == "수입 현황 대시보드":
         df_agg[change_col_name] = df_agg[base_col_name] - df_agg[prev_col_name]
         df_agg[rate_col_name] = df_agg[change_col_name] / df_agg[prev_col_name].replace(0, np.nan)
         
-        with st.expander("📊 Before & After"):
+        with st.expander("📊 Before & After (증감 상위/하위 5개 품목)"):
             create_butterfly_chart_altair(df_agg, base_col_name, prev_col_name, base_label, prev_label)
         
         formatter = {
@@ -298,10 +304,39 @@ if menu == "수입 현황 대시보드":
         }
         
         st.markdown(f'<p style="color:red; font-weight:bold;">🔼 {value_name} 증가 TOP 5 ({change_name} 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(df_agg.nlargest(5, change_col_name).reset_index().style.format(formatter, na_rep="-"), hide_index=True)
+        st.dataframe(df_agg.nlargest(5, change_col_name).reset_index().style.format(formatter, na_rep="-"), hide_index=True, use_container_width=True)
         
         st.markdown(f'<p style="color:blue; font-weight:bold;">🔽 {value_name} 감소 TOP 5 ({change_name} 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(df_agg.nsmallest(5, change_col_name).reset_index().style.format(formatter, na_rep="-"), hide_index=True)
+        st.dataframe(df_agg.nsmallest(5, change_col_name).reset_index().style.format(formatter, na_rep="-"), hide_index=True, use_container_width=True)
+
+        # ---- [수정] 신규 수입 품목 TOP 10 기능 추가 ----
+        st.markdown(f'<p style="color:green; font-weight:bold;">❇️ 신규 수입 품목 TOP 10 (이전 기간 0)</p>', unsafe_allow_html=True)
+        
+        # 이전 기간(prev_col_name)은 0이고, 기준 기간(base_col_name)은 0보다 큰 품목 필터링
+        new_items_df = df_agg[
+            (df_agg[base_col_name] > 0) & (df_agg[prev_col_name] == 0)
+        ]
+        
+        if new_items_df.empty:
+            st.info("해당 기간에 신규로 수입된 품목이 없습니다.")
+        else:
+            # 기준 기간 수입량(액) 기준으로 정렬하여 상위 10개 추출
+            new_items_top10 = new_items_df.sort_values(
+                by=base_col_name, ascending=False
+            ).head(10).reset_index()
+            
+            # 요청한 컬럼만 선택 (품목명, 기준수입량, 이전수입량)
+            final_new_items_df = new_items_top10.rename(
+                columns={'대표품목별': '품목명'}
+            )[['품목명', base_col_name, prev_col_name]]
+            
+            # 데이터프레임 표시 (formatter 재사용)
+            st.dataframe(
+                final_new_items_df.style.format(formatter, na_rep="-"), 
+                hide_index=True,
+                use_container_width=True
+            )
+        # ---- [수정] 기능 추가 완료 ----
 
 
     tab_yy, tab_mom, tab_yoy, tab_qoq, tab_hoh = st.tabs([
@@ -499,7 +534,7 @@ elif menu == "시계열 추세 분석":
 elif menu == "기간별 추이 분석":
     st.title(f"📆 기간별 {value_name} 추이 분석 (기준: {primary_col})")
     st.markdown("---")
-    analysis_df = df.dropna(subset=['날짜', primary_col, '연도', '월', '분기', '반기'])
+    analysis_df = df.dropna(subset=['날짜', primary_col, '연도', '월', '분기', '반기', '제품구분별', '대표품목별'])
     if analysis_df.empty:
         st.warning("분석할 유효한 데이터가 없습니다.")
         st.stop()
@@ -508,26 +543,43 @@ elif menu == "기간별 추이 분석":
     with col1:
         period_type = st.radio("분석 기간 단위", ('월별', '분기별', '반기별'))
     
+    MAX_SELECTIONS = 5
+    all_categories = sorted(analysis_df['제품구분별'].unique())
     all_items = sorted(analysis_df['대표품목별'].unique())
+
     with col2:
-        if 'selected_items_memory' not in st.session_state:
-            st.session_state.selected_items_memory = []
-
-        st.session_state.selected_items_memory = [
-            item for item in st.session_state.selected_items_memory if item in all_items
-        ]
-
-        st.multiselect(
-            "품목 선택 (최대 5개)",
-            options=all_items,
-            placeholder=f"{value_name} 추이를 확인할 품목을 선택해주세요",
-            key='selected_items_memory',
-            max_selections=5
+        st.markdown("##### 1. 제품구분별 선택 (카테고리)")
+        selected_categories = st.multiselect(
+            "제품구분별 선택 (카테고리)",
+            options=all_categories,
+            placeholder="카테고리를 선택하세요 (최대 5개)",
+            label_visibility="collapsed",
+            max_selections=MAX_SELECTIONS
         )
-        selected_items = st.session_state.selected_items_memory
+        
+        remaining_slots = MAX_SELECTIONS - len(selected_categories)
+        
+        if selected_categories:
+            filtered_items_df = analysis_df[analysis_df['제품구분별'].isin(selected_categories)]
+            available_items = sorted(filtered_items_df['대표품목별'].unique())
+            item_placeholder = "선택한 카테고리의 개별 품목 (선택 사항)"
+        else:
+            available_items = all_items
+            item_placeholder = "개별 품목을 선택하세요 (선택 사항)"
+
+        st.markdown("##### 2. 대표품목별 선택 (개별 품목)")
+        selected_items = st.multiselect(
+            "대표품목별 선택 (개별 품목)",
+            options=available_items,
+            placeholder=f"{item_placeholder} (남은 선택: {remaining_slots}개)",
+            label_visibility="collapsed",
+            max_selections=remaining_slots,
+            disabled=(remaining_slots == 0)
+        )
+
+    total_selections = len(selected_categories) + len(selected_items)
     
-    if selected_items:
-        filtered_df = analysis_df[analysis_df['대표품목별'].isin(selected_items)]
+    if total_selections > 0:
         agg_cols, title_suffix = [], ""
         if period_type == '월별':
             agg_cols, title_suffix = ['연도', '월'], f"월별 {value_name} 추이"
@@ -536,8 +588,22 @@ elif menu == "기간별 추이 분석":
         elif period_type == '반기별':
             agg_cols, title_suffix = ['연도', '반기'], f"반기별 {value_name} 추이"
         
-        agg_df = filtered_df.groupby(agg_cols + ['대표품목별'])[primary_col].sum().unstack().fillna(0)
+        df_for_cat = analysis_df[analysis_df['제품구분별'].isin(selected_categories)]
+        agg_cat_df = pd.DataFrame()
+        if not df_for_cat.empty:
+            agg_cat_df = df_for_cat.groupby(agg_cols + ['제품구분별'])[primary_col].sum().unstack(fill_value=0)
         
+        df_for_item = analysis_df[analysis_df['대표품목별'].isin(selected_items)]
+        agg_item_df = pd.DataFrame()
+        if not df_for_item.empty:
+            agg_item_df = df_for_item.groupby(agg_cols + ['대표품목별'])[primary_col].sum().unstack(fill_value=0)
+        
+        agg_df = pd.concat([agg_cat_df, agg_item_df], axis=1)
+        
+        if agg_df.empty:
+            st.info("선택한 항목에 대한 데이터가 없습니다.")
+            st.stop()
+
         if period_type == '월별':
             agg_df.index = agg_df.index.map(lambda x: f"{int(x[0])}-{int(x[1]):02d}")
         elif period_type == '분기별':
@@ -547,7 +613,7 @@ elif menu == "기간별 추이 분석":
         
         st.header(f"📈 {title_suffix}")
         
-        df_melted = agg_df.reset_index().melt(id_vars='index', var_name='대표품목별', value_name=f'{value_name}{unit}')
+        df_melted = agg_df.reset_index().melt(id_vars='index', var_name='선택항목', value_name=f'{value_name}{unit}')
         df_melted.rename(columns={'index': '기간'}, inplace=True)
         
         chart_type = st.radio("차트 종류", ('선 그래프', '막대 그래프'), horizontal=True, key="chart_type_trends")
@@ -555,8 +621,8 @@ elif menu == "기간별 추이 분석":
         base_chart = alt.Chart(df_melted).encode(
             x=alt.X('기간:N', sort=None, title='기간'),
             y=alt.Y(f'{value_name}{unit}:Q', title=f'{value_name} {unit}', axis=alt.Axis(format=axis_format)),
-            color='대표품목별:N',
-            tooltip=['기간', '대표품목별', alt.Tooltip(f'{value_name}{unit}', title=value_name, format=',.0f')]
+            color=alt.Color('선택항목:N', title='선택 항목'),
+            tooltip=['기간', alt.Tooltip('선택항목', title='선택 항목'), alt.Tooltip(f'{value_name}{unit}', title=value_name, format=',.0f')]
         )
         
         chart = base_chart.mark_line(point=True).interactive() if chart_type == '선 그래프' else base_chart.mark_bar().interactive()
@@ -569,7 +635,7 @@ elif menu == "기간별 추이 분석":
             growth_rate_df = agg_df.pct_change()
             st.dataframe(growth_rate_df.style.format("{:+.2%}", na_rep="-"))
     else:
-        st.info("그래프를 보려면 먼저 품목을 선택해주세요.")
+        st.info("그래프를 보려면 먼저 카테고리 또는 품목을 선택해주세요.")
 
 # --- 데이터 추가 페이지 ---
 elif menu == "데이터 추가":
@@ -599,11 +665,9 @@ elif menu == "데이터 추가":
                 if client:
                     sheet = client.open(GOOGLE_SHEET_NAME).worksheet(WORKSHEET_NAME)
                     
-                    # 기존 데이터에서 업로드 파일의 연/월과 중복되는 데이터 삭제
                     unique_periods = new_df_processed.dropna(subset=['연도', '월'])[['연도', '월']].drop_duplicates()
                     df_filtered = df.copy()
                     if not df_filtered.empty and not unique_periods.empty:
-                        # merge를 사용하여 중복 인덱스를 찾고 제외
                         df_filtered['연도'] = pd.to_numeric(df_filtered['연도'], errors='coerce')
                         df_filtered['월'] = pd.to_numeric(df_filtered['월'], errors='coerce')
                         
@@ -613,7 +677,6 @@ elif menu == "데이터 추가":
                     combined_df = pd.concat([df_filtered, new_df_processed], ignore_index=True)
                     combined_df.sort_values(by=['Year', 'Month', 'NO'], inplace=True, na_position='last')
                     
-                    # 최종적으로 저장할 데이터프레임의 컬럼 순서 고정
                     df_to_write = combined_df.reindex(columns=DESIRED_HEADER)
                     
                     update_sheet_in_batches(sheet, df_to_write)
