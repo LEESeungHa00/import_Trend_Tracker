@@ -34,11 +34,12 @@ WORKSHEET_NAME = "월별통합"
 
 # ---------------------------------
 # 구글 시트 연동 설정
-# --------------------------------
+# ---------------------------------
 def get_google_sheet_client():
     """Streamlit의 Secrets를 사용하여 구글 시트 API에 연결하고 클라이언트 객체를 반환합니다."""
     try:
         creds_dict = st.secrets["gcp_service_account"]
+        # [수정] https:// 로 올바른 scope 사용
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive"
@@ -49,6 +50,7 @@ def get_google_sheet_client():
     except Exception as e:
         st.error(f"🚨 구글 시트 인증 중 오류가 발생했습니다: {e}")
         return None
+
 # ---------------------------------
 # 데이터 로딩 및 전처리
 # ---------------------------------
@@ -122,6 +124,7 @@ def load_data():
 
 def create_sample_data():
     """분석용 샘플 데이터를 생성합니다."""
+    # [수정] '제품구분별' 필터 기능을 위해 카테고리(categories) 맵핑 추가
     items = ['소고기(냉장)', '바지락(활)', '김치', '과자', '맥주', '새우(냉동)', '오렌지', '바나나', '커피원두', '치즈']
     categories = {
         '소고기(냉장)': '축산물', '바지락(활)': '수산물', '김치': '가공식품', 
@@ -136,7 +139,7 @@ def create_sample_data():
             weight = (10000 + items.index(item) * 5000) * np.random.uniform(0.8, 1.2)
             price = weight * np.random.uniform(5, 10)
             data.append([
-                no_counter, date.year, date.month, categories[item], '미국', '미국', '판매용',
+                no_counter, date.year, date.month, categories[item], '미국', '미국', '판매용', # [수정] categories[item] 사용
                 item, weight, price, weight*0.95, price*0.95, weight*0.05, price*0.05
             ])
             no_counter += 1
@@ -221,7 +224,7 @@ if df.empty and menu != "데이터 추가":
     st.warning("데이터가 없습니다. '데이터 추가' 탭으로 이동하여 데이터를 업로드해주세요.")
     st.stop()
 
-# ----- [수정] 줌/팬 동작 재정의 -----
+# ----- [신규] 줌/팬 동작 재정의 -----
 # 1. 확대 (그냥 드래그)
 zoom_on_drag = alt.selection_interval(
     bind='scales',
@@ -288,7 +291,7 @@ if menu == "수입 현황 대시보드":
             ]
         ).properties(
             title=alt.TitleParams(text=f'{prev_label} vs {base_label} {value_name} 비교', anchor='middle')
-        ).add_params( # [수정] .interactive() 대신 add_params 사용
+        ).add_params( # [수정] 드래그 확대 기능
             zoom_on_drag,
             pan_on_shift_drag
         )
@@ -327,6 +330,7 @@ if menu == "수입 현황 대시보드":
         st.markdown(f'<p style="color:blue; font-weight:bold;">🔽 {value_name} 감소 TOP 5 ({change_name} 많은 순)</p>', unsafe_allow_html=True)
         st.dataframe(df_agg.nsmallest(5, change_col_name).reset_index().style.format(formatter, na_rep="-"), hide_index=True, use_container_width=True)
 
+        # [수정] 신규 수입 품목 TOP 10 기능 추가
         st.markdown(f'<p style="color:green; font-weight:bold;">❇️ 신규 수입 품목 TOP 10 (이전 기간 0)</p>', unsafe_allow_html=True)
         
         new_items_df = df_agg[
@@ -474,7 +478,7 @@ elif menu == "시계열 추세 분석":
                         y=alt.Y(f'{primary_col}:Q', title=f'{value_name} {unit}', axis=alt.Axis(format=axis_format)),
                         tooltip=['연도', alt.Tooltip(f'{primary_col}', title=value_name, format=',.0f')]
                     ).properties(title=f"'{selected_item_y}'의 {start_y}년 ~ {end_y}년 {value_name} 추이"
-                    ).add_params( # [수정] .interactive() 대신 add_params 사용
+                    ).add_params( # [수정] 드래그 확대 기능
                         zoom_on_drag,
                         pan_on_shift_drag
                     )
@@ -541,7 +545,7 @@ elif menu == "시계열 추세 분석":
                         y=alt.Y(f'{primary_col}:Q', title=f'{value_name} {unit}', axis=alt.Axis(format=axis_format)),
                         tooltip=['기간', alt.Tooltip(f'{primary_col}', title=value_name, format=',.0f')]
                     ).properties(title=f"'{selected_item_m}'의 {start_m} ~ {end_m} {value_name} 추이"
-                    ).add_params( # [수정] .interactive() 대신 add_params 사용
+                    ).add_params( # [수정] 드래그 확대 기능
                         zoom_on_drag,
                         pan_on_shift_drag
                     )
@@ -549,10 +553,11 @@ elif menu == "시계열 추세 분석":
     else:
         st.warning("월별 추세를 분석하려면 최소 3개월 이상의 데이터가 필요합니다.")
 
-# --- 기간별 추이 분석 페이지 ---
+# --- 기간별 추이 분석 페이지 (2단계 필터 로직) ---
 elif menu == "기간별 추이 분석":
     st.title(f"📆 기간별 {value_name} 추이 분석 (기준: {primary_col})")
     st.markdown("---")
+    # [수정] '제품구분별'도 dropna 대상에 포함
     analysis_df = df.dropna(subset=['날짜', primary_col, '연도', '월', '분기', '반기', '제품구분별', '대표품목별'])
     if analysis_df.empty:
         st.warning("분석할 유효한 데이터가 없습니다.")
@@ -566,7 +571,6 @@ elif menu == "기간별 추이 분석":
     all_items = sorted(analysis_df['대표품목별'].unique())
 
     with col2:
-        # [수정] UI 텍스트 명확화
         st.markdown("##### 1. 제품구분별 선택 (최대 5개)")
         st.info("기본적으로 '카테고리' 그래프가 그려집니다. 2번에서 품목 선택 시 '필터'로 동작합니다.")
         selected_categories = st.multiselect(
@@ -586,7 +590,6 @@ elif menu == "기간별 추이 분석":
             available_items = all_items
             item_placeholder = "전체 개별 품목 (최대 5개)"
 
-        # [수정] UI 텍스트 명확화
         st.markdown("##### 2. 대표품목별 선택 (최대 5개)")
         st.info("여기에 품목을 선택하면, 그래프는 '품목' 기준으로 그려집니다.")
         selected_items = st.multiselect(
@@ -601,6 +604,7 @@ elif menu == "기간별 추이 분석":
     agg_df = pd.DataFrame()
     
     if selected_items:
+        # 품목 모드
         graph_title = "대표품목별 추이"
         agg_by_col = '대표품목별'
         filtered_df = analysis_df[analysis_df['대표품목별'].isin(selected_items)]
@@ -608,6 +612,7 @@ elif menu == "기간별 추이 분석":
              filtered_df = filtered_df[filtered_df['제품구분별'].isin(selected_categories)]
     
     elif selected_categories:
+        # 카테고리 모드
         graph_title = "제품구분별 추이"
         agg_by_col = '제품구분별'
         filtered_df = analysis_df[analysis_df['제품구분별'].isin(selected_categories)]
@@ -645,13 +650,12 @@ elif menu == "기간별 추이 분석":
             
             chart_type = st.radio("차트 종류", ('선 그래프', '막대 그래프'), horizontal=True, key="chart_type_trends")
             
-            # [수정] .interactive() 대신 add_params를 base_chart에 적용
             base_chart = alt.Chart(df_melted).encode(
                 x=alt.X('기간:N', sort=None, title='기간'),
                 y=alt.Y(f'{value_name}{unit}:Q', title=f'{value_name} {unit}', axis=alt.Axis(format=axis_format)),
                 color=alt.Color(f'{agg_by_col}:N', title='선택 항목'),
                 tooltip=['기간', alt.Tooltip(f'{agg_by_col}', title='선택 항목'), alt.Tooltip(f'{value_name}{unit}', title=value_name, format=',.0f')]
-            ).add_params(
+            ).add_params( # [수정] 드래그 확대 기능
                 zoom_on_drag,
                 pan_on_shift_drag
             )
