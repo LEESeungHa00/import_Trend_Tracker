@@ -6,6 +6,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import time
 import altair as alt
+import plotly.express as px # [수정] Plotly 라이브러리 추가
 
 # ---------------------------------
 # 페이지 기본 설정
@@ -39,7 +40,6 @@ def get_google_sheet_client():
     """Streamlit의 Secrets를 사용하여 구글 시트 API에 연결하고 클라이언트 객체를 반환합니다."""
     try:
         creds_dict = st.secrets["gcp_service_account"]
-        # [수정] https:// 로 올바른 scope 사용
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive"
@@ -124,7 +124,6 @@ def load_data():
 
 def create_sample_data():
     """분석용 샘플 데이터를 생성합니다."""
-    # [수정] '제품구분별' 필터 기능을 위해 카테고리(categories) 맵핑 추가
     items = ['소고기(냉장)', '바지락(활)', '김치', '과자', '맥주', '새우(냉동)', '오렌지', '바나나', '커피원두', '치즈']
     categories = {
         '소고기(냉장)': '축산물', '바지락(활)': '수산물', '김치': '가공식품', 
@@ -139,7 +138,7 @@ def create_sample_data():
             weight = (10000 + items.index(item) * 5000) * np.random.uniform(0.8, 1.2)
             price = weight * np.random.uniform(5, 10)
             data.append([
-                no_counter, date.year, date.month, categories[item], '미국', '미국', '판매용', # [수정] categories[item] 사용
+                no_counter, date.year, date.month, categories[item], '미국', '미국', '판매용',
                 item, weight, price, weight*0.95, price*0.95, weight*0.05, price*0.05
             ])
             no_counter += 1
@@ -199,7 +198,7 @@ if analysis_mode == '중량 모드':
     value_name = '수입량'
     change_name = '증감량'
     format_str = '{:,.0f}'
-    axis_format = '~s'
+    axis_format = '~s' # Altair 전용 포맷
     label_expr = """
     datum.value == 0 ? '0' : 
     (abs(datum.value) >= 1000000 ? format(abs(datum.value) / 1000000, ',.0f') + 'M' : 
@@ -211,7 +210,7 @@ else: # 금액 모드
     value_name = '수입액'
     change_name = '증감액'
     format_str = '${:,.0f}'
-    axis_format = '$,.0s'
+    axis_format = '$,.0s' # Altair 전용 포맷
     label_expr = """
     datum.value == 0 ? '$0' : 
     (abs(datum.value) >= 1000000 ? '$' + format(abs(datum.value) / 1000000, ',.0f') + 'M' : 
@@ -224,17 +223,15 @@ if df.empty and menu != "데이터 추가":
     st.warning("데이터가 없습니다. '데이터 추가' 탭으로 이동하여 데이터를 업로드해주세요.")
     st.stop()
 
-# ----- [신규] 줌/팬 동작 재정의 -----
-# 1. 확대 (그냥 드래그)
+# ----- Altair 줌/팬 동작 정의 (다른 탭에서 사용) -----
 zoom_on_drag = alt.selection_interval(
     bind='scales',
-    on="[mousedown[!event.shiftKey], mouseup] > mousemove", # Shift 키가 눌리지 않은 상태의 드래그
+    on="[mousedown[!event.shiftKey], mouseup] > mousemove",
     empty='all'
 )
-# 2. 이동 (Shift + 드래그)
 pan_on_shift_drag = alt.selection_interval(
     bind='scales',
-    on="[mousedown[event.shiftKey], mouseup] > mousemove", # Shift 키가 눌린 상태의 드래그
+    on="[mousedown[event.shiftKey], mouseup] > mousemove",
     empty='all'
 )
 # -----------------------------------
@@ -291,7 +288,7 @@ if menu == "수입 현황 대시보드":
             ]
         ).properties(
             title=alt.TitleParams(text=f'{prev_label} vs {base_label} {value_name} 비교', anchor='middle')
-        ).add_params( # [수정] 드래그 확대 기능
+        ).add_params( # Altair 줌/팬 적용
             zoom_on_drag,
             pan_on_shift_drag
         )
@@ -330,7 +327,6 @@ if menu == "수입 현황 대시보드":
         st.markdown(f'<p style="color:blue; font-weight:bold;">🔽 {value_name} 감소 TOP 5 ({change_name} 많은 순)</p>', unsafe_allow_html=True)
         st.dataframe(df_agg.nsmallest(5, change_col_name).reset_index().style.format(formatter, na_rep="-"), hide_index=True, use_container_width=True)
 
-        # [수정] 신규 수입 품목 TOP 10 기능 추가
         st.markdown(f'<p style="color:green; font-weight:bold;">❇️ 신규 수입 품목 TOP 10 (이전 기간 0)</p>', unsafe_allow_html=True)
         
         new_items_df = df_agg[
@@ -478,7 +474,7 @@ elif menu == "시계열 추세 분석":
                         y=alt.Y(f'{primary_col}:Q', title=f'{value_name} {unit}', axis=alt.Axis(format=axis_format)),
                         tooltip=['연도', alt.Tooltip(f'{primary_col}', title=value_name, format=',.0f')]
                     ).properties(title=f"'{selected_item_y}'의 {start_y}년 ~ {end_y}년 {value_name} 추이"
-                    ).add_params( # [수정] 드래그 확대 기능
+                    ).add_params( # Altair 줌/팬 적용
                         zoom_on_drag,
                         pan_on_shift_drag
                     )
@@ -545,7 +541,7 @@ elif menu == "시계열 추세 분석":
                         y=alt.Y(f'{primary_col}:Q', title=f'{value_name} {unit}', axis=alt.Axis(format=axis_format)),
                         tooltip=['기간', alt.Tooltip(f'{primary_col}', title=value_name, format=',.0f')]
                     ).properties(title=f"'{selected_item_m}'의 {start_m} ~ {end_m} {value_name} 추이"
-                    ).add_params( # [수정] 드래그 확대 기능
+                    ).add_params( # Altair 줌/팬 적용
                         zoom_on_drag,
                         pan_on_shift_drag
                     )
@@ -553,11 +549,10 @@ elif menu == "시계열 추세 분석":
     else:
         st.warning("월별 추세를 분석하려면 최소 3개월 이상의 데이터가 필요합니다.")
 
-# --- 기간별 추이 분석 페이지 (2단계 필터 로직) ---
+# --- [수정] 기간별 추이 분석 페이지 (Plotly로 교체) ---
 elif menu == "기간별 추이 분석":
     st.title(f"📆 기간별 {value_name} 추이 분석 (기준: {primary_col})")
     st.markdown("---")
-    # [수정] '제품구분별'도 dropna 대상에 포함
     analysis_df = df.dropna(subset=['날짜', primary_col, '연도', '월', '분기', '반기', '제품구분별', '대표품목별'])
     if analysis_df.empty:
         st.warning("분석할 유효한 데이터가 없습니다.")
@@ -604,7 +599,6 @@ elif menu == "기간별 추이 분석":
     agg_df = pd.DataFrame()
     
     if selected_items:
-        # 품목 모드
         graph_title = "대표품목별 추이"
         agg_by_col = '대표품목별'
         filtered_df = analysis_df[analysis_df['대표품목별'].isin(selected_items)]
@@ -612,7 +606,6 @@ elif menu == "기간별 추이 분석":
              filtered_df = filtered_df[filtered_df['제품구분별'].isin(selected_categories)]
     
     elif selected_categories:
-        # 카테고리 모드
         graph_title = "제품구분별 추이"
         agg_by_col = '제품구분별'
         filtered_df = analysis_df[analysis_df['제품구분별'].isin(selected_categories)]
@@ -650,18 +643,34 @@ elif menu == "기간별 추이 분석":
             
             chart_type = st.radio("차트 종류", ('선 그래프', '막대 그래프'), horizontal=True, key="chart_type_trends")
             
-            base_chart = alt.Chart(df_melted).encode(
-                x=alt.X('기간:N', sort=None, title='기간'),
-                y=alt.Y(f'{value_name}{unit}:Q', title=f'{value_name} {unit}', axis=alt.Axis(format=axis_format)),
-                color=alt.Color(f'{agg_by_col}:N', title='선택 항목'),
-                tooltip=['기간', alt.Tooltip(f'{agg_by_col}', title='선택 항목'), alt.Tooltip(f'{value_name}{unit}', title=value_name, format=',.0f')]
-            ).add_params( # [수정] 드래그 확대 기능
-                zoom_on_drag,
-                pan_on_shift_drag
+            # --- [수정] Altair -> Plotly로 교체 ---
+            fig = None
+            if chart_type == '선 그래프':
+                fig = px.line(
+                    df_melted, 
+                    x='기간', 
+                    y=f'{value_name}{unit}', 
+                    color=agg_by_col,
+                    markers=True, # 라인에 마커(점) 표시
+                    labels={f'{value_name}{unit}': f'{value_name} {unit}', '기간': '기간', agg_by_col: '선택 항목'} # 범례 제목
+                )
+            else: # 막대 그래프
+                fig = px.bar(
+                    df_melted, 
+                    x='기간', 
+                    y=f'{value_name}{unit}', 
+                    color=agg_by_col,
+                    labels={f'{value_name}{unit}': f'{value_name} {unit}', '기간': '기간', agg_by_col: '선택 항목'}
+                )
+            
+            # Plotly 차트 레이아웃 업데이트 (x축 정렬 유지)
+            fig.update_layout(
+                xaxis={'categoryorder':'total descending'} if (period_type == '월별' and len(agg_df) > 12) else {'categoryorder':'trace'},
+                hovermode="x unified" # 마우스 오버 시 x축 기준 모든 데이터 표시
             )
             
-            chart = base_chart.mark_line(point=True) if chart_type == '선 그래프' else base_chart.mark_bar()
-            st.altair_chart(chart, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True)
+            # --- 교체 완료 ---
                 
             with st.expander("데이터 상세 보기"):
                 st.subheader(f"기간별 {value_name} {unit}")
