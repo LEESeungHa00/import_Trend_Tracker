@@ -6,6 +6,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import time
 import altair as alt
+import plotly
 import plotly.express as px # [수정] Plotly 라이브러리 추가
 
 # ---------------------------------
