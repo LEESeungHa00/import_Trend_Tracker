@@ -255,8 +255,8 @@ if menu == "수입 현황 대시보드":
     def create_butterfly_chart_altair(df_agg, base_col, prev_col, base_label, prev_label):
         """증감 상위/하위 품목에 대한 나비 차트를 생성합니다."""
         change_col = f'{change_name}{unit}'
-        top_items = df_agg.nlargest(20, change_col)
-        bottom_items = df_agg.nsmallest(20, change_col)
+        top_items = df_agg.nlargest(5, change_col)
+        bottom_items = df_agg.nsmallest(5, change_col)
         chart_data = pd.concat([top_items, bottom_items])
         
         if chart_data.empty:
@@ -322,11 +322,11 @@ if menu == "수입 현황 대시보드":
             rate_col_name: '{:+.2%}'
         }
         
-        st.markdown(f'<p style="color:red; font-weight:bold;">🔼 {value_name} 증가 TOP 5 ({change_name} 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(df_agg.nlargest(5, change_col_name).reset_index().style.format(formatter, na_rep="-"), hide_index=True, use_container_width=True)
+        st.markdown(f'<p style="color:red; font-weight:bold;">🔼 {value_name} 증가 TOP 20 ({change_name} 많은 순)</p>', unsafe_allow_html=True)
+        st.dataframe(df_agg.nlargest(20, change_col_name).reset_index().style.format(formatter, na_rep="-"), hide_index=True, use_container_width=True)
         
-        st.markdown(f'<p style="color:blue; font-weight:bold;">🔽 {value_name} 감소 TOP 5 ({change_name} 많은 순)</p>', unsafe_allow_html=True)
-        st.dataframe(df_agg.nsmallest(5, change_col_name).reset_index().style.format(formatter, na_rep="-"), hide_index=True, use_container_width=True)
+        st.markdown(f'<p style="color:blue; font-weight:bold;">🔽 {value_name} 감소 TOP 20 ({change_name} 많은 순)</p>', unsafe_allow_html=True)
+        st.dataframe(df_agg.nsmallest(20, change_col_name).reset_index().style.format(formatter, na_rep="-"), hide_index=True, use_container_width=True)
 
         st.markdown(f'<p style="color:green; font-weight:bold;">❇️ 신규 수입 품목 TOP 10 (이전 기간 0)</p>', unsafe_allow_html=True)
         
