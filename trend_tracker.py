@@ -255,8 +255,8 @@ if menu == "수입 현황 대시보드":
     def create_butterfly_chart_altair(df_agg, base_col, prev_col, base_label, prev_label):
         """증감 상위/하위 품목에 대한 나비 차트를 생성합니다."""
         change_col = f'{change_name}{unit}'
-        top_items = df_agg.nlargest(5, change_col)
-        bottom_items = df_agg.nsmallest(5, change_col)
+        top_items = df_agg.nlargest(20, change_col)
+        bottom_items = df_agg.nsmallest(20, change_col)
         chart_data = pd.concat([top_items, bottom_items])
         
         if chart_data.empty:
