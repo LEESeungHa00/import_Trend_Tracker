@@ -6,8 +6,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import time
 import altair as alt
-import plotly
-import plotly.express as px # [수정] Plotly 라이브러리 추가
+import plotly.express as px
 
 # ---------------------------------
 # 페이지 기본 설정
@@ -37,6 +36,7 @@ WORKSHEET_NAME = "월별통합"
 # ---------------------------------
 # 구글 시트 연동 설정
 # ---------------------------------
+@st.cache_resource
 def get_google_sheet_client():
     """Streamlit의 Secrets를 사용하여 구글 시트 API에 연결하고 클라이언트 객체를 반환합니다."""
     try:
@@ -77,10 +77,11 @@ def preprocess_dataframe(df):
             errors='coerce'
         )
         valid_dates = df_copy['날짜'].notna()
-        df_copy.loc[valid_dates, '연도'] = df_copy.loc[valid_dates, '날짜'].dt.year
-        df_copy.loc[valid_dates, '월'] = df_copy.loc[valid_dates, '날짜'].dt.month
-        df_copy.loc[valid_dates, '분기'] = df_copy.loc[valid_dates, '날짜'].dt.quarter
-        df_copy.loc[valid_dates, '반기'] = (df_copy.loc[valid_dates, '날짜'].dt.month - 1) // 6 + 1
+        valid_dt = df_copy.loc[valid_dates, '날짜'].dt  # 한 번만 참조
+        df_copy.loc[valid_dates, '연도'] = valid_dt.year
+        df_copy.loc[valid_dates, '월'] = valid_dt.month
+        df_copy.loc[valid_dates, '분기'] = valid_dt.quarter
+        df_copy.loc[valid_dates, '반기'] = (valid_dt.month - 1) // 6 + 1
     return df_copy
 
 @st.cache_data(ttl=3600)
@@ -123,6 +124,7 @@ def load_data():
         st.error(f"데이터 로딩 중 예상치 못한 오류 발생: {e}")
         return create_sample_data()
 
+@st.cache_data
 def create_sample_data():
     """분석용 샘플 데이터를 생성합니다."""
     items = ['소고기(냉장)', '바지락(활)', '김치', '과자', '맥주', '새우(냉동)', '오렌지', '바나나', '커피원두', '치즈']
@@ -135,8 +137,8 @@ def create_sample_data():
     data = []
     no_counter = 1
     for date in daterange:
-        for item in items:
-            weight = (10000 + items.index(item) * 5000) * np.random.uniform(0.8, 1.2)
+        for i, item in enumerate(items):  # items.index(item) O(n) → enumerate O(1)
+            weight = (10000 + i * 5000) * np.random.uniform(0.8, 1.2)
             price = weight * np.random.uniform(5, 10)
             data.append([
                 no_counter, date.year, date.month, categories[item], '미국', '미국', '판매용',
@@ -437,9 +439,10 @@ elif menu == "시계열 추세 분석":
 
         period_df_yearly = yearly_agg[(yearly_agg['연도'] >= start_y) & (yearly_agg['연도'] <= end_y)]
         results_yearly = []
-        for item, group in period_df_yearly.groupby('대표품목별'):
+        # 루프 진입 전 정렬 → 루프 내 sort_values 제거
+        period_df_yearly_sorted = period_df_yearly.sort_values(['대표품목별', '연도'])
+        for item, group in period_df_yearly_sorted.groupby('대표품목별', sort=False):
             if len(group['연도'].unique()) == duration_years:
-                group = group.sort_values('연도')
                 diffs = group[primary_col].diff().dropna()
                 if (trend_type_years == "지속 증가 📈" and (diffs > 0).all()) or \
                    (trend_type_years == "지속 감소 📉" and (diffs < 0).all()):
@@ -713,13 +716,14 @@ elif menu == "데이터 추가":
                     sheet = client.open(GOOGLE_SHEET_NAME).worksheet(WORKSHEET_NAME)
                     
                     unique_periods = new_df_processed.dropna(subset=['연도', '월'])[['연도', '월']].drop_duplicates()
-                    df_filtered = df.copy()
-                    if not df_filtered.empty and not unique_periods.empty:
-                        df_filtered['연도'] = pd.to_numeric(df_filtered['연도'], errors='coerce')
-                        df_filtered['월'] = pd.to_numeric(df_filtered['월'], errors='coerce')
-                        
-                        merged = df_filtered.merge(unique_periods, on=['연도', '월'], how='left', indicator=True)
-                        df_filtered = df_filtered[merged['_merge'] == 'left_only']
+                    if not df.empty and not unique_periods.empty:
+                        df_num = df.copy()
+                        df_num['연도'] = pd.to_numeric(df_num['연도'], errors='coerce')
+                        df_num['월'] = pd.to_numeric(df_num['월'], errors='coerce')
+                        merged = df_num.merge(unique_periods, on=['연도', '월'], how='left', indicator=True)
+                        df_filtered = df[merged['_merge'] == 'left_only']
+                    else:
+                        df_filtered = df
 
                     combined_df = pd.concat([df_filtered, new_df_processed], ignore_index=True)
                     combined_df.sort_values(by=['Year', 'Month', 'NO'], inplace=True, na_position='last')
